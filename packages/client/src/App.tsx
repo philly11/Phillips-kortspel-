@@ -8,10 +8,12 @@ import {
   applyAction,
   cardToString,
   createGame,
+  hideCards,
   isGameOver,
+  revealCards,
   view,
 } from '@kortspel/engine';
-import { ERROR_MESSAGES } from './messages';
+import { ERROR_MESSAGES, REVEAL_ERROR_MESSAGES } from './messages';
 import { PlayingCard } from './PlayingCard';
 import { Seat } from './Seat';
 import { theme } from './theme';
@@ -78,6 +80,29 @@ export function App() {
     setSelected([]);
   }
 
+  /** The taunt: show the selected cards to the table. It doesn't use up your turn. */
+  function showSelected() {
+    const result = revealCards(state, state.currentPlayer, selected);
+    if (!result.ok) {
+      setMessage({ text: REVEAL_ERROR_MESSAGES[result.error.code], kind: 'error' });
+      return;
+    }
+    setMessage({ text: ` ${name(state.currentPlayer)} shows ${show(selected)} to the table!`, kind: 'info' });
+    setState(result.value);
+    setSelected([]);
+  }
+
+  /** Turn your revealed cards face-down again. */
+  function hideAll() {
+    const result = hideCards(state, state.currentPlayer);
+    if (!result.ok) {
+      setMessage({ text: REVEAL_ERROR_MESSAGES[result.error.code], kind: 'error' });
+      return;
+    }
+    setMessage({ text: `🙈 ${name(state.currentPlayer)} hides their cards again.`, kind: 'info' });
+    setState(result.value);
+  }
+
   function startNextGame() {
     setState(newGame(state.finished[0]));
     setSelected([]);
@@ -88,7 +113,7 @@ export function App() {
     minHeight: '100vh',
     boxSizing: 'border-box',
     padding: 32,
-    background: theme.colors.felt,
+    background: theme.colors.room,
     color: theme.colors.tableText,
     fontFamily: theme.font.family,
     display: 'flex',
@@ -148,23 +173,53 @@ export function App() {
         justifyItems: 'center',
       }}
     >
-      <header style={{ gridArea: 'title', justifySelf: 'start', alignSelf: 'start' }}>
+      {/* The table itself: a felt oval with a wooden rim, leaning back in 3D.
+          It spans the top two rows of the grid and sits BEHIND everything else. */}
+      <div
+        aria-hidden="true"
+        style={{
+          gridRow: '1 / 3',
+          gridColumn: '1 / 4',
+          alignSelf: 'stretch',
+          justifySelf: 'stretch',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          perspective: theme.table.perspective,
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            width: '92%',
+            height: '96%',
+            boxSizing: 'border-box',
+            borderRadius: '50%',
+            background: theme.colors.felt,
+            border: `${theme.table.rimWidth}px solid ${theme.colors.tableRim}`,
+            boxShadow: `0 ${theme.table.rimWidth}px 0 ${theme.colors.tableRimShadow}`,
+            transform: `rotateX(${theme.table.tilt}deg)`,
+          }}
+        />
+      </div>
+
+      <header style={{ gridArea: 'title', justifySelf: 'start', alignSelf: 'start', zIndex: 1 }}>
         <h1 style={{ margin: 0, fontSize: 28 }}>Tiến Lên</h1>
         <p style={{ margin: '2px 0 0', fontSize: 14, color: theme.colors.tableTextMuted }}>Seed {state.seed}</p>
       </header>
 
-      <div style={{ gridArea: 'top' }}>
+      <div style={{ gridArea: 'top', zIndex: 1 }}>
         <Seat seat={topSeat} view={v} />
       </div>
-      <div style={{ gridArea: 'left' }}>
+      <div style={{ gridArea: 'left', zIndex: 1 }}>
         <Seat seat={leftSeat} view={v} />
       </div>
-      <div style={{ gridArea: 'right' }}>
+      <div style={{ gridArea: 'right', zIndex: 1 }}>
         <Seat seat={rightSeat} view={v} />
       </div>
 
       {/* Middle of the table: the combo to beat */}
-      <section style={{ gridArea: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <section style={{ gridArea: 'center', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         {v.table === null ? (
           <p style={{ margin: 0, fontSize: 20, color: theme.colors.tableTextMuted, textAlign: 'center' }}>
             New trick: {name(v.me)} leads
@@ -172,7 +227,14 @@ export function App() {
           </p>
         ) : (
           <>
-            <div style={{ display: 'flex', gap: 8 }}>
+            {/* Tilted the same way as the table, so the cards lie flat on the felt. */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                transform: `perspective(${theme.table.perspective}px) rotateX(${theme.table.tilt}deg)`,
+              }}
+            >
               {v.table.cards.map((card) => (
                 <PlayingCard key={card} card={card} width={theme.card.tableWidth} />
               ))}
@@ -185,12 +247,36 @@ export function App() {
       </section>
 
       {/* Bottom: whose turn, the hand, the buttons, the message */}
-      <section style={{ gridArea: 'me', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <p style={{ margin: 0, fontSize: 22 }}>{name(v.me)}'s turn</p>
+      <section style={{ gridArea: 'me', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <p
+          style={{
+            margin: 0,
+            padding: '4px 18px',
+            borderRadius: 999,
+            background: theme.colors.turnPill,
+            color: theme.colors.turnPillText,
+            fontSize: 20,
+            fontWeight: theme.font.weight,
+          }}
+        >
+          {name(v.me)}'s turn
+        </p>
 
-        <div style={{ display: 'flex', paddingTop: theme.card.selectedLift }}>
+        <div
+          style={{
+            display: 'flex',
+            paddingTop: theme.card.selectedLift + 12,
+            // Room for the outer cards of the fan, which sit lower than the middle ones.
+            paddingBottom: fanDrop(v.hand.length),
+          }}
+        >
           {v.hand.map((card, index) => {
             const isSelected = selected.includes(card);
+            // The fan: cards further from the middle turn more and sit a little lower.
+            const fromMiddle = index - (v.hand.length - 1) / 2;
+            const angle = fromMiddle * theme.hand.fanAngle;
+            const drop = fromMiddle * fromMiddle * theme.hand.fanArc;
+            const lift = isSelected ? theme.card.selectedLift : 0;
             return (
               <button
                 key={card}
@@ -203,7 +289,8 @@ export function App() {
                   cursor: 'pointer',
                   marginLeft: index === 0 ? 0 : -overlap,
                   borderRadius: theme.card.width * theme.card.cornerRadius,
-                  transform: isSelected ? `translateY(-${theme.card.selectedLift}px)` : 'none',
+                  transformOrigin: '50% 100%',
+                  transform: `translateY(${drop}px) rotate(${angle}deg) translateY(${-lift}px)`,
                   boxShadow: isSelected ? `0 0 0 4px ${theme.colors.selectedRing}` : 'none',
                   transition: `transform ${theme.motion.selectMs}ms ease-out`,
                 }}
@@ -229,7 +316,22 @@ export function App() {
           >
             Pass
           </button>
+          <button type="button" onClick={showSelected} style={tauntButtonStyle}>
+            Show
+          </button>
+          <button type="button" onClick={hideAll} style={tauntButtonStyle}>
+            Hide
+          </button>
         </div>
+
+        {v.revealed[v.me].length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: theme.colors.tableTextMuted, fontSize: 14 }}>you are showing</span>
+            {v.revealed[v.me].map((card) => (
+              <PlayingCard key={card} card={card} width={theme.card.revealedWidth} />
+            ))}
+          </div>
+        )}
 
         <p
           role="status"
@@ -264,3 +366,18 @@ function buttonStyle(background: string, color: string): CSSProperties {
     boxShadow: `0 5px 0 ${theme.colors.buttonShadow}`,
   };
 }
+
+/** How far the outermost card of a fan of `count` cards drops below the middle one. */
+function fanDrop(count: number): number {
+  const half = (count - 1) / 2;
+  return half * half * theme.hand.fanArc;
+}
+
+/** The smaller, outlined Show / Hide buttons. */
+const tauntButtonStyle: CSSProperties = {
+  ...buttonStyle('transparent', theme.colors.tauntButtonText),
+  minWidth: 100,
+  fontSize: 18,
+  border: `3px solid ${theme.colors.tauntButtonBorder}`,
+  boxShadow: 'none',
+};

@@ -1,4 +1,4 @@
-import type { ActionError } from '@kortspel/engine';
+import type { ActionError, RevealError } from '@kortspel/engine';
 
 /**
  * A friendly message for every reason the engine can refuse an action.
@@ -16,4 +16,11 @@ export const ERROR_MESSAGES: Record<ActionError['code'], string> = {
   CARDS_NOT_IN_HAND: 'You do not have those cards.',
   MISSING_REQUIRED_CARD: 'The first play of the game must include 3♠.',
   CANNOT_PASS_ON_LEAD: 'You are leading a new trick, so you cannot pass. Play anything.',
+};
+
+/** A friendly message for every reason the engine can refuse a reveal (the taunt). */
+export const REVEAL_ERROR_MESSAGES: Record<RevealError['code'], string> = {
+  INVALID_PLAYER: 'That player does not exist.',
+  EMPTY: 'Select the cards you want to show first.',
+  CARDS_NOT_IN_HAND: 'You can only show cards you actually have.',
 };

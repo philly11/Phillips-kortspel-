@@ -4,8 +4,13 @@
  */
 export const theme = {
   colors: {
+    /** The room around the table (the "floor"). */
+    room: '#2A1D17',
     /** The table surface. */
     felt: '#0E4A38',
+    /** The wooden edge around the table. */
+    tableRim: '#7A4A26',
+    tableRimShadow: 'rgba(0, 0, 0, 0.45)',
     /** Text on the table. */
     tableText: '#FFFFFF',
     tableTextMuted: '#CFE8DD',
@@ -23,6 +28,12 @@ export const theme = {
     playButtonText: '#1C1C22',
     passButton: '#FFFFFF',
     passButtonText: '#1C1C22',
+    /** Secondary buttons (Show / Hide). */
+    tauntButtonBorder: '#FFFFFF',
+    tauntButtonText: '#FFFFFF',
+    /** The "Player 3's turn" pill. */
+    turnPill: '#FFC83D',
+    turnPillText: '#1C1C22',
     buttonShadow: 'rgba(0, 0, 0, 0.35)',
     /** Messages under the buttons. */
     errorText: '#FFB4B4',
@@ -68,6 +79,22 @@ export const theme = {
   seat: {
     /** A player who has passed this trick is faded to this opacity. */
     passedOpacity: 0.45,
+  },
+
+  table: {
+    /** How far the table leans back, in degrees. 0 = seen straight from above. */
+    tilt: 24,
+    /** Distance of the "camera" in px. Smaller = stronger 3D effect. */
+    perspective: 1400,
+    /** Thickness of the wooden rim in px. */
+    rimWidth: 18,
+  },
+
+  hand: {
+    /** Each card in the hand is turned this many degrees more than its left neighbour. */
+    fanAngle: 2.5,
+    /** How much the cards drop towards the ends of the fan, making an arc. */
+    fanArc: 0.9,
   },
 
   motion: {
