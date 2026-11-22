@@ -72,3 +72,65 @@ describe('checkBeat: different combo types', () => {
     expect(checkBeat(combo('3♠ 4♠ 5♠'), combo('9♠ 9♣ 9♦'))).toEqual(err({ code: 'WRONG_TYPE' }));
   });
 });
+
+
+describe('checkBeat: chopping (chặt) with 3 consecutive pairs', () => {
+  const threePairs = '3♠ 3♣ 4♠ 4♣ 5♠ 5♣'; // the lowest possible: chopping ignores height
+
+  it('chops a single 2', () => {
+    expect(checkBeat(combo('2♥'), combo(threePairs))).toEqual(ok('chop'));
+  });
+
+  it('cannot chop a pair of 2s', () => {
+    expect(checkBeat(combo('2♦ 2♥'), combo(threePairs))).toEqual(err({ code: 'WRONG_TYPE' }));
+  });
+
+  it('cannot chop a single that is not a 2', () => {
+    expect(checkBeat(combo('A♥'), combo(threePairs))).toEqual(err({ code: 'WRONG_TYPE' }));
+  });
+});
+
+describe('checkBeat: chopping (chặt) with four of a kind', () => {
+  const four = '6♠ 6♣ 6♦ 6♥';
+
+  it('chops a single 2, a pair of 2s, and 3 consecutive pairs', () => {
+    expect(checkBeat(combo('2♥'), combo(four))).toEqual(ok('chop'));
+    expect(checkBeat(combo('2♦ 2♥'), combo(four))).toEqual(ok('chop'));
+    expect(checkBeat(combo('9♠ 9♣ 10♠ 10♣ J♠ J♣'), combo(four))).toEqual(ok('chop'));
+  });
+
+  it('cannot chop a pair that is not 2s', () => {
+    expect(checkBeat(combo('A♠ A♥'), combo(four))).toEqual(err({ code: 'WRONG_TYPE' }));
+  });
+
+  it('cannot chop a triple of 2s (not on the list)', () => {
+    expect(checkBeat(combo('2♣ 2♦ 2♥'), combo(four))).toEqual(err({ code: 'WRONG_TYPE' }));
+  });
+
+  it('cannot chop 4 consecutive pairs', () => {
+    expect(checkBeat(combo('3♠ 3♣ 4♠ 4♣ 5♠ 5♣ 6♠ 6♣'), combo(four))).toEqual(err({ code: 'WRONG_TYPE' }));
+  });
+});
+
+describe('checkBeat: chopping (chặt) with 4 or more consecutive pairs', () => {
+  const fourPairs = '3♠ 3♣ 4♠ 4♣ 5♠ 5♣ 6♠ 6♣';
+
+  it('chops a single 2, a pair of 2s, 3 consecutive pairs, and four of a kind', () => {
+    expect(checkBeat(combo('2♥'), combo(fourPairs))).toEqual(ok('chop'));
+    expect(checkBeat(combo('2♦ 2♥'), combo(fourPairs))).toEqual(ok('chop'));
+    expect(checkBeat(combo('9♠ 9♣ 10♠ 10♣ J♠ J♣'), combo(fourPairs))).toEqual(ok('chop'));
+    expect(checkBeat(combo('K♠ K♣ K♦ K♥'), combo(fourPairs))).toEqual(ok('chop'));
+  });
+
+  it('5 consecutive pairs chop too', () => {
+    expect(checkBeat(combo('K♠ K♣ K♦ K♥'), combo('3♠ 3♣ 4♠ 4♣ 5♠ 5♣ 6♠ 6♣ 7♠ 7♣'))).toEqual(ok('chop'));
+  });
+
+  it('cannot chop a single that is not a 2', () => {
+    expect(checkBeat(combo('A♥'), combo(fourPairs))).toEqual(err({ code: 'WRONG_TYPE' }));
+  });
+
+  it('against 4 consecutive pairs on the table, the normal rule applies', () => {
+    expect(checkBeat(combo(fourPairs), combo('7♠ 7♣ 8♠ 8♣ 9♠ 9♣ 10♠ 10♣'))).toEqual(ok('normal'));
+  });
+});
