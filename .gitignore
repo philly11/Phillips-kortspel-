@@ -1,0 +1,11 @@
+# Installed libraries (pnpm recreates these from the lockfile)
+node_modules/
+
+# Build output
+dist/
+coverage/
+
+# Secrets and OS junk
+.env
+.DS_Store
+*.log
