@@ -97,8 +97,16 @@ export const theme = {
     fanArc: 0.9,
   },
 
-  motion: {
+    motion: {
     /** How long a card takes to pop up or drop back, in ms. (Pillar: under 300 ms.) */
     selectMs: 120,
+    /** Played cards fly in from the player's seat, starting this many px away... */
+    flyDistance: 240,
+    /** ...this much bigger (as if lifted off the table)... */
+    flyScale: 1.25,
+    /** ...each card a little after the previous one, in seconds... */
+    flyStagger: 0.03,
+    /** ...and land on a spring: higher stiffness = faster, lower damping = more bounce. */
+    landSpring: { stiffness: 600, damping: 22, mass: 0.8 },
   },
 } as const;

@@ -16,6 +16,7 @@ import {
 import { ERROR_MESSAGES, REVEAL_ERROR_MESSAGES } from './messages';
 import { PlayingCard } from './PlayingCard';
 import { Seat } from './Seat';
+import { TrickPile } from './TrickPile';
 import { theme } from './theme';
 
 /**
@@ -99,7 +100,7 @@ export function App() {
       setMessage({ text: REVEAL_ERROR_MESSAGES[result.error.code], kind: 'error' });
       return;
     }
-    setMessage({ text: `🙈 ${name(state.currentPlayer)} hides their cards again.`, kind: 'info' });
+    setMessage({ text: ` ${name(state.currentPlayer)} hides their cards again.`, kind: 'info' });
     setState(result.value);
   }
 
@@ -218,7 +219,7 @@ export function App() {
         <Seat seat={rightSeat} view={v} />
       </div>
 
-      {/* Middle of the table: the combo to beat */}
+            {/* Middle of the table: the combo to beat */}
       <section style={{ gridArea: 'center', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         {v.table === null ? (
           <p style={{ margin: 0, fontSize: 20, color: theme.colors.tableTextMuted, textAlign: 'center' }}>
@@ -227,18 +228,14 @@ export function App() {
           </p>
         ) : (
           <>
-            {/* Tilted the same way as the table, so the cards lie flat on the felt. */}
-            <div
-              style={{
-                display: 'flex',
-                gap: 8,
-                transform: `perspective(${theme.table.perspective}px) rotateX(${theme.table.tilt}deg)`,
-              }}
-            >
-              {v.table.cards.map((card) => (
-                <PlayingCard key={card} card={card} width={theme.card.tableWidth} />
-              ))}
-            </div>
+            {/* The `key` changes with every new play, so React treats it as a brand-new
+                pile and Motion plays the fly-in animation again. */}
+            <TrickPile
+              key={`${v.lastPlayedBy}:${v.table.cards.join(',')}`}
+              combo={v.table}
+              playedBy={v.lastPlayedBy ?? v.me}
+              me={v.me}
+            />
             <p style={{ margin: 0, color: theme.colors.tableTextMuted }}>
               played by {name(v.lastPlayedBy ?? v.me)}
             </p>
