@@ -50,6 +50,7 @@ export function makeState(options: {
   passed?: boolean[];
   finished?: number[];
   requiredCard?: string | null;
+  revealed?: string[];
 }): GameState {
   const table = options.table ?? null;
   const requiredCard = options.requiredCard ?? null;
@@ -62,5 +63,6 @@ export function makeState(options: {
     passed: options.passed ?? options.hands.map(() => false),
     finished: options.finished ?? [],
     requiredCard: requiredCard === null ? null : card(requiredCard),
+    revealed: options.revealed?.map(cards) ?? options.hands.map(() => []),
   };
 }

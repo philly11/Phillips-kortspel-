@@ -13,3 +13,4 @@ export * from './game';
 export * from './actions';
 export * from './result';
 export * from './view';
+export * from './reveal';

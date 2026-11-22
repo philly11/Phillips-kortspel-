@@ -24,6 +24,8 @@ export interface PlayerView {
   readonly passed: readonly boolean[];
   readonly finished: readonly PlayerId[];
   readonly requiredCard: Card | null;
+  /** revealed[seat] = cards that player chose to show to the table. Public on purpose. */
+  readonly revealed: readonly Hand[];
 }
 
 export interface ViewError {
@@ -51,5 +53,6 @@ export function view(state: GameState, playerId: PlayerId): Result<PlayerView, V
     passed: state.passed,
     finished: state.finished,
     requiredCard: state.requiredCard,
+    revealed: state.revealed,
   });
 }

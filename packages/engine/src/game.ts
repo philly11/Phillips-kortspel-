@@ -37,6 +37,8 @@ export interface GameState {
   readonly finished: readonly PlayerId[];
   /** A card the next play must include (3♠ on the first play of a first game). */
   readonly requiredCard: Card | null;
+  /** revealed[seat] = cards that player has chosen to show to the whole table (see reveal.ts). */
+  readonly revealed: readonly Hand[];
 }
 
 export interface CreateGameOptions {
@@ -73,7 +75,8 @@ export function createGame(options: CreateGameOptions): Result<GameState, GameEr
     passed: Array.from({ length: PLAYER_COUNT }, () => false),
     finished: [],
     requiredCard: isFirstGame ? THREE_OF_SPADES : null,
-  });
+    revealed: Array.from({ length: PLAYER_COUNT }, () => []),
+});
 }
 
 /** Shuffle a fresh deck with the seed and split it into sorted hands of 13. */

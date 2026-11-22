@@ -3,6 +3,7 @@ import { type BeatError, checkBeat } from './beat';
 import { type ComboError, detectCombo } from './combo';
 import { type GameState, type PlayerId, PLAYER_COUNT } from './game';
 import { type Result, ok, err } from './result';
+import { forgetPlayedCards } from './reveal';
 
 /** Something a player can do on their turn. */
 export type Action =
@@ -41,6 +42,7 @@ export function playCards(state: GameState, cards: readonly Card[]): Result<Game
 
   const player = state.currentPlayer;
   const hand = state.hands[player];
+  
 
   // 1. Is it a combo at all?
   const combo = detectCombo(cards);
@@ -78,6 +80,7 @@ export function playCards(state: GameState, cards: readonly Card[]): Result<Game
     table: combo.value,
     lastPlayedBy: player,
     requiredCard: null,
+    revealed: forgetPlayedCards(state.revealed, player, cards),
   };
   return ok(advanceTurn(next, player));
 }
