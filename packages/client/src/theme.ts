@@ -34,6 +34,9 @@ export const theme = {
     /** The Play button fills with this color while you hold it to charge a slam. */
     slamCharge: '#FF5A36',
     slamChargeText: '#FFFFFF',
+    /** The big "CHẶT!" stamp when someone chops. */
+    chopText: '#FFC83D',
+    chopOutline: '#1C1C22',
     /** The "Player 3's turn" pill. */
     turnPill: '#FFC83D',
     turnPillText: '#1C1C22',
@@ -122,5 +125,13 @@ export const theme = {
     shakeDistance: 12,
     shakeSeconds: 0.35,
     shakeDelay: 0.08,
+    
+    /** CHẶT! stamp: font size (px), bigger when the chop was also slammed... */
+    chopSize: 110,
+    chopSlamSize: 160,
+    /** ...how long it stays on screen in total (s): it stamps in fast, then fades out... */
+    chopSeconds: 1.2,
+    /** ...and how much it's tilted (degrees). */
+    chopTilt: -8,
   },
 } as const;

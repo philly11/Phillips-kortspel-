@@ -14,6 +14,7 @@ import {
   revealCards,
   view,
 } from '@kortspel/engine';
+import { ChopBurst } from './ChopBurst';
 import { ERROR_MESSAGES, REVEAL_ERROR_MESSAGES } from './messages';
 import { PlayButton } from './PlayButton';
 import { PlayingCard } from './PlayingCard';
@@ -242,7 +243,15 @@ export function App() {
       <div style={{ gridArea: 'right', zIndex: 1 }}>
         <Seat seat={rightSeat} view={v} />
       </div>
-
+      
+            {/* CHẶT! stamped over the middle of the table when the last play was a chop.
+          It shares the 'center' grid area with the trick, on a higher layer. */}
+      {v.lastPlay?.chopped && (
+        <div style={{ gridArea: 'center', zIndex: 2 }}>
+          <ChopBurst key={playKey} slammed={v.lastPlay.slammed} />
+        </div>
+      )}
+      
       {/* Middle of the table: the combo to beat */}
       <section style={{ gridArea: 'center', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         {v.table === null ? (
