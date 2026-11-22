@@ -31,6 +31,9 @@ export const theme = {
     /** Secondary buttons (Show / Hide). */
     tauntButtonBorder: '#FFFFFF',
     tauntButtonText: '#FFFFFF',
+    /** The Play button fills with this color while you hold it to charge a slam. */
+    slamCharge: '#FF5A36',
+    slamChargeText: '#FFFFFF',
     /** The "Player 3's turn" pill. */
     turnPill: '#FFC83D',
     turnPillText: '#1C1C22',
@@ -97,7 +100,7 @@ export const theme = {
     fanArc: 0.9,
   },
 
-    motion: {
+  motion: {
     /** How long a card takes to pop up or drop back, in ms. (Pillar: under 300 ms.) */
     selectMs: 120,
     /** Played cards fly in from the player's seat, starting this many px away... */
@@ -108,5 +111,16 @@ export const theme = {
     flyStagger: 0.03,
     /** ...and land on a spring: higher stiffness = faster, lower damping = more bounce. */
     landSpring: { stiffness: 600, damping: 22, mass: 0.8 },
+
+    /** SLAM: hold Play at least this long (ms) to charge it. A quick tap is a normal play. */
+    slamHoldMs: 450,
+    /** A slammed card starts much bigger (as if raised high)... */
+    slamScale: 2.2,
+    /** ...and comes down on a stiffer, harder spring. */
+    slamSpring: { stiffness: 1100, damping: 18, mass: 1 },
+    /** Then the whole table shakes: how far (px), for how long (s), starting after (s). */
+    shakeDistance: 12,
+    shakeSeconds: 0.35,
+    shakeDelay: 0.08,
   },
 } as const;

@@ -10,6 +10,8 @@ interface TrickPileProps {
   playedBy: PlayerId;
   /** Who is looking (sits at the bottom of the screen). */
   me: PlayerId;
+  /** Was it SLAMMED down? Then it comes in bigger and harder. */
+  slammed: boolean;
 }
 
 /**
@@ -29,8 +31,9 @@ function flyFrom(playedBy: PlayerId, me: PlayerId): { x: number; y: number } {
 }
 
 /** The combo on the table. Each new combo flies in from its player's seat and lands with a bounce. */
-export function TrickPile({ combo, playedBy, me }: TrickPileProps) {
+export function TrickPile({ combo, playedBy, me, slammed }: TrickPileProps) {
   const from = flyFrom(playedBy, me);
+  const m = theme.motion;
   return (
     // Tilted the same way as the table, so the cards lie flat on the felt.
     <div
@@ -44,11 +47,20 @@ export function TrickPile({ combo, playedBy, me }: TrickPileProps) {
         <motion.div
           key={card}
           // Where the card starts when it first appears...
-          initial={{ x: from.x, y: from.y, scale: theme.motion.flyScale, opacity: 0 }}
+          initial={{
+            x: slammed ? from.x / 2 : from.x,
+            y: slammed ? from.y / 2 : from.y,
+            scale: slammed ? m.slamScale : m.flyScale,
+            opacity: 0,
+          }}
           // ...where it ends up...
           animate={{ x: 0, y: 0, scale: 1, opacity: 1 }}
-          // ...and how it gets there: a springy landing, cards one after another.
-          transition={{ type: 'spring', ...theme.motion.landSpring, delay: index * theme.motion.flyStagger }}
+          // ...and how it gets there: a springy landing (much harder for a slam).
+          transition={{
+            type: 'spring',
+            ...(slammed ? m.slamSpring : m.landSpring),
+            delay: slammed ? 0 : index * m.flyStagger,
+          }}
         >
           <PlayingCard card={card} width={theme.card.tableWidth} />
         </motion.div>

@@ -1,4 +1,5 @@
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, useEffect, useState } from 'react';
+import { useAnimate } from 'motion/react';
 import {
   type Action,
   type Card,
@@ -14,6 +15,7 @@ import {
   view,
 } from '@kortspel/engine';
 import { ERROR_MESSAGES, REVEAL_ERROR_MESSAGES } from './messages';
+import { PlayButton } from './PlayButton';
 import { PlayingCard } from './PlayingCard';
 import { Seat } from './Seat';
 import { TrickPile } from './TrickPile';
@@ -45,7 +47,11 @@ interface Message {
 function describe(before: GameState, after: GameState, action: Action): string {
   const player = before.currentPlayer;
   const parts = [
-    action.type === 'pass' ? `${name(player)} passed.` : `${name(player)} played ${show(action.cards)}.`,
+    action.type === 'pass'
+      ? `${name(player)} passed.`
+      : action.slam
+        ? `${name(player)} SLAMS ${show(action.cards)}!`
+        : `${name(player)} played ${show(action.cards)}.`,
   ];
   if (after.finished.length > before.finished.length) {
     parts.push(`${name(player)} is out of cards!`);
@@ -61,6 +67,23 @@ export function App() {
   const [state, setState] = useState(() => newGame());
   const [selected, setSelected] = useState<readonly Card[]>([]);
   const [message, setMessage] = useState<Message | null>(null);
+
+  // SLAM shake: `scope` marks the element to shake, `animate` shakes it on demand.
+  const [scope, animate] = useAnimate();
+  const playKey = state.table === null ? null : `${state.lastPlayedBy}:${state.table.cards.join(',')}`;
+  const slammedNow = state.lastPlay?.slammed ?? false;
+
+  // useEffect runs AFTER React has drawn the screen, whenever one of the values in
+  // the list at the end changes. Here: every new play. If it was a slam, shake the table.
+  useEffect(() => {
+    if (!slammedNow || scope.current === null) return;
+    const d = theme.motion.shakeDistance;
+    animate(
+      scope.current,
+      { x: [0, -d, d * 0.8, -d * 0.5, d * 0.25, 0] },
+      { duration: theme.motion.shakeSeconds, delay: theme.motion.shakeDelay },
+    );
+  }, [playKey, slammedNow, animate, scope]);
 
   /** Click a card in your hand: select it, or unselect it if it was selected. */
   function toggle(card: Card) {
@@ -88,7 +111,7 @@ export function App() {
       setMessage({ text: REVEAL_ERROR_MESSAGES[result.error.code], kind: 'error' });
       return;
     }
-    setMessage({ text: ` ${name(state.currentPlayer)} shows ${show(selected)} to the table!`, kind: 'info' });
+    setMessage({ text: `${name(state.currentPlayer)} shows ${show(selected)} to the table!`, kind: 'info' });
     setState(result.value);
     setSelected([]);
   }
@@ -100,7 +123,7 @@ export function App() {
       setMessage({ text: REVEAL_ERROR_MESSAGES[result.error.code], kind: 'error' });
       return;
     }
-    setMessage({ text: ` ${name(state.currentPlayer)} hides their cards again.`, kind: 'info' });
+    setMessage({ text: `${name(state.currentPlayer)} hides their cards again.`, kind: 'info' });
     setState(result.value);
   }
 
@@ -160,6 +183,7 @@ export function App() {
 
   return (
     <main
+      ref={scope}
       style={{
         ...pageStyle,
         display: 'grid',
@@ -219,7 +243,7 @@ export function App() {
         <Seat seat={rightSeat} view={v} />
       </div>
 
-            {/* Middle of the table: the combo to beat */}
+      {/* Middle of the table: the combo to beat */}
       <section style={{ gridArea: 'center', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         {v.table === null ? (
           <p style={{ margin: 0, fontSize: 20, color: theme.colors.tableTextMuted, textAlign: 'center' }}>
@@ -235,6 +259,7 @@ export function App() {
               combo={v.table}
               playedBy={v.lastPlayedBy ?? v.me}
               me={v.me}
+              slammed={v.lastPlay?.slammed ?? false}
             />
             <p style={{ margin: 0, color: theme.colors.tableTextMuted }}>
               played by {name(v.lastPlayedBy ?? v.me)}
@@ -299,13 +324,10 @@ export function App() {
         </div>
 
         <div style={{ display: 'flex', gap: 16 }}>
-          <button
-            type="button"
-            onClick={() => act({ type: 'play', cards: selected })}
+          <PlayButton
+            onPlay={(slam) => act({ type: 'play', cards: selected, slam })}
             style={buttonStyle(theme.colors.playButton, theme.colors.playButtonText)}
-          >
-            Play
-          </button>
+          />
           <button
             type="button"
             onClick={() => act({ type: 'pass' })}
