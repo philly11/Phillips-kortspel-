@@ -34,3 +34,20 @@ A glossary of concepts used in this project and why we use them.
 
 **What:** Libraries needed only while developing (TypeScript, Vitest), not when the game runs. Installed with `pnpm add -D`.
 **Why we use it:** It keeps the final game small and makes clear which tools are for builders only.
+
+## Pure function
+
+**What:** A function whose output depends only on its inputs, and which changes nothing outside itself (no screen, network, clock or randomness).
+**Analogy:** A calculator. 2 + 2 is always 4, and pressing it doesn't change anything else.
+**Why we use it:** The whole engine is pure, so we can test any situation directly, replay a game exactly, and run the same code on the client, the server and in bots.
+
+## Unit test (Vitest)
+
+**What:** A small piece of code that calls your code and checks the result automatically. Vitest is the tool that runs them.
+**Analogy:** A smoke detector. It stays quiet until something breaks, then it alerts you right away.
+**Why we use it:** Tiến Lên has many rules and edge cases. Tests prove each rule works and warn us if a later change breaks an old rule.
+
+## Card encoding (`rank * 4 + suit`)
+
+**What:** Each card is one number from 0 to 51. Rank is multiplied by 4 so that rank always matters more than suit.
+**Why we use it:** Comparing cards becomes `a > b`, sorting is a plain number sort, and a card is cheap to store and send over the network.
