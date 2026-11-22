@@ -3,12 +3,20 @@ import { type Result, ok, err } from './result';
 
 /**
  * The kinds of combo a player can lay down.
- * More kinds (four of a kind, consecutive pairs) are added in later steps.
  */
-export type ComboType = 'single' | 'pair' | 'triple' | 'straight';
+export type ComboType =
+  | 'single'
+  | 'pair'
+  | 'triple'
+  | 'four-of-a-kind'
+  | 'straight'
+  | 'consecutive-pairs';
 
 /** A straight needs at least this many cards. */
 export const MIN_STRAIGHT_LENGTH = 3;
+
+/** Consecutive pairs need at least this many pairs (3 pairs = 6 cards). */
+export const MIN_CONSECUTIVE_PAIRS = 3;
 
 /** A recognised, legal-shaped group of cards. */
 export interface Combo {
@@ -53,11 +61,17 @@ export function detectCombo(cards: readonly Card[]): Result<Combo, ComboError> {
         return ok(makeCombo('pair', sorted));
       case 3:
         return ok(makeCombo('triple', sorted));
+      case 4:
+        return ok(makeCombo('four-of-a-kind', sorted));
     }
   }
 
   if (sorted.length >= MIN_STRAIGHT_LENGTH && isStraight(sorted)) {
     return ok(makeCombo('straight', sorted));
+  }
+
+  if (sorted.length >= MIN_CONSECUTIVE_PAIRS * 2 && isConsecutivePairs(sorted)) {
+    return ok(makeCombo('consecutive-pairs', sorted));
   }
 
   return err({ code: 'NOT_A_COMBO' });
@@ -74,7 +88,7 @@ function allSameRank(cards: readonly Card[]): boolean {
  * Ranks must go up by exactly 1 each time, so repeated ranks and gaps both fail.
  */
 function isStraight(sorted: readonly Card[]): boolean {
-  if (sorted.some((card) => rankOf(card) === RANK.TWO)) {
+  if (containsTwo(sorted)) {
     return false;
   }
   for (let i = 1; i < sorted.length; i++) {
@@ -83,6 +97,34 @@ function isStraight(sorted: readonly Card[]): boolean {
     }
   }
   return true;
+}
+
+/**
+ * True if the sorted cards are pairs with consecutive ranks and no 2s,
+ * e.g. 3-3-4-4-5-5. Sorting puts each pair's two cards next to each other,
+ * so we can walk the list two cards at a time.
+ */
+function isConsecutivePairs(sorted: readonly Card[]): boolean {
+  if (sorted.length % 2 !== 0 || containsTwo(sorted)) {
+    return false;
+  }
+  for (let i = 0; i < sorted.length; i += 2) {
+    const rank = rankOf(sorted[i]);
+    // Both cards of this pair must have the same rank...
+    if (rankOf(sorted[i + 1]) !== rank) {
+      return false;
+    }
+    // ...and each pair must be exactly one rank above the previous pair.
+    if (i > 0 && rank !== rankOf(sorted[i - 2]) + 1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** True if any card is a 2. Sequences (straights, consecutive pairs) can't contain 2s. */
+function containsTwo(cards: readonly Card[]): boolean {
+  return cards.some((card) => rankOf(card) === RANK.TWO);
 }
 
 /** Build a Combo from cards that are already sorted. */
