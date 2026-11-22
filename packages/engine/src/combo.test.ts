@@ -46,6 +46,49 @@ describe('detectCombo: triple', () => {
   });
 });
 
+
+describe('detectCombo: straight', () => {
+  it('three cards in a row are a straight; suits can be mixed', () => {
+    expect(detectCombo(cards('3♠ 4♦ 5♣'))).toEqual(
+      ok({ type: 'straight', cards: cards('3♠ 4♦ 5♣'), top: card('5♣') }),
+    );
+  });
+
+  it('the order you pick the cards in does not matter', () => {
+    expect(detectCombo(cards('5♣ 3♠ 4♦'))).toEqual(
+      ok({ type: 'straight', cards: cards('3♠ 4♦ 5♣'), top: card('5♣') }),
+    );
+  });
+
+  it('Q-K-A is a straight (ace is allowed at the top)', () => {
+    expect(detectCombo(cards('Q♦ K♠ A♣'))).toEqual(
+      ok({ type: 'straight', cards: cards('Q♦ K♠ A♣'), top: card('A♣') }),
+    );
+  });
+
+  it('the longest straight is 3 up to A (12 cards)', () => {
+    const all = cards('3♠ 4♠ 5♠ 6♠ 7♠ 8♠ 9♠ 10♠ J♠ Q♠ K♠ A♥');
+    expect(detectCombo(all)).toEqual(ok({ type: 'straight', cards: all, top: card('A♥') }));
+  });
+
+  it('a straight can never contain a 2', () => {
+    expect(detectCombo(cards('K♠ A♦ 2♥'))).toEqual(err({ code: 'NOT_A_COMBO' }));
+    expect(detectCombo(cards('A♠ 2♦ 3♣'))).toEqual(err({ code: 'NOT_A_COMBO' }));
+  });
+
+  it('two cards in a row are too short to be a straight', () => {
+    expect(detectCombo(cards('3♠ 4♠'))).toEqual(err({ code: 'NOT_A_COMBO' }));
+  });
+
+  it('a gap in the ranks is not a straight', () => {
+    expect(detectCombo(cards('3♠ 4♠ 6♠'))).toEqual(err({ code: 'NOT_A_COMBO' }));
+  });
+
+  it('a repeated rank is not a straight', () => {
+    expect(detectCombo(cards('3♠ 3♦ 4♠ 5♠'))).toEqual(err({ code: 'NOT_A_COMBO' }));
+  });
+});
+
 describe('detectCombo: bad input', () => {
   it('no cards is an error', () => {
     expect(detectCombo([])).toEqual(err({ code: 'EMPTY' }));
