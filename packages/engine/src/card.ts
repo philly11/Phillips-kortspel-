@@ -1,3 +1,5 @@
+import { type Result, ok, err } from './result';
+
 /**
  * A card is one integer from 0 to 51: rank * 4 + suit.
  *
@@ -73,4 +75,65 @@ export function makeDeck(): Card[] {
 /** Returns a NEW array sorted weakest → strongest. The input is not changed. */
 export function sortCards(cards: readonly Card[]): Card[] {
   return [...cards].sort((a, b) => a - b);
+}
+
+// ---------------------------------------------------------------------------
+// Parsing text into cards
+// ---------------------------------------------------------------------------
+
+/** What went wrong when parsing. `input` is the exact text that failed. */
+export interface ParseCardError {
+  readonly code: 'INVALID_CARD';
+  readonly input: string;
+}
+
+/** Suit symbols plus keyboard-friendly letters: s(pades), c(lubs), d(iamonds), h(earts). */
+const SUIT_FROM_TEXT = new Map<string, number>([
+  ['♠', SUIT.SPADES],
+  ['s', SUIT.SPADES],
+  ['♣', SUIT.CLUBS],
+  ['c', SUIT.CLUBS],
+  ['♦', SUIT.DIAMONDS],
+  ['d', SUIT.DIAMONDS],
+  ['♥', SUIT.HEARTS],
+  ['h', SUIT.HEARTS],
+]);
+
+/**
+ * Turn text like "3♠", "10♦", "Jc" or "ah" into a card.
+ * The last character is the suit; everything before it is the rank.
+ */
+export function parseCard(text: string): Result<Card, ParseCardError> {
+  // \uFE0F is an invisible "show as emoji" marker that phones add after ♥ etc.
+  const cleaned = text.replace(/\uFE0F/g, '').trim();
+
+  const suit = SUIT_FROM_TEXT.get(cleaned.slice(-1).toLowerCase());
+  // RANK_LABELS has exact literal types; widen to string[] so indexOf accepts any text.
+  const rank = (RANK_LABELS as readonly string[]).indexOf(cleaned.slice(0, -1).toUpperCase());
+
+  if (suit === undefined || rank === -1) {
+    return err({ code: 'INVALID_CARD', input: text });
+  }
+  return ok(makeCard(rank, suit));
+}
+
+/**
+ * Turn space-separated text like "3♠ 4♠ 5♠" into a list of cards.
+ * Empty text gives an empty list. One bad card fails the whole thing.
+ */
+export function parseCards(text: string): Result<Card[], ParseCardError> {
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    return ok([]);
+  }
+
+  const cards: Card[] = [];
+  for (const part of trimmed.split(/\s+/)) {
+    const result = parseCard(part);
+    if (!result.ok) {
+      return result; // pass the error straight up
+    }
+    cards.push(result.value);
+  }
+  return ok(cards);
 }

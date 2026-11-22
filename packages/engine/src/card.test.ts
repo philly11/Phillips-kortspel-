@@ -6,10 +6,13 @@ import {
   isValidCard,
   makeCard,
   makeDeck,
+  parseCard,
+  parseCards,
   rankOf,
   sortCards,
   suitOf,
 } from './card';
+import { ok, err } from './result';
 
 describe('card encoding', () => {
   it('3♠ is the lowest card (0) and 2♥ is the highest (51)', () => {
@@ -97,5 +100,57 @@ describe('sortCards', () => {
     const original = [51, 0, 27];
     sortCards(original);
     expect(original).toEqual([51, 0, 27]);
+  });
+});
+
+describe('parseCard', () => {
+  it('reads suit symbols', () => {
+    expect(parseCard('3♠')).toEqual(ok(makeCard(RANK.THREE, SUIT.SPADES)));
+    expect(parseCard('10♦')).toEqual(ok(makeCard(RANK.TEN, SUIT.DIAMONDS)));
+    expect(parseCard('2♥')).toEqual(ok(makeCard(RANK.TWO, SUIT.HEARTS)));
+  });
+
+  it('reads keyboard letters in any case', () => {
+    expect(parseCard('3s')).toEqual(ok(makeCard(RANK.THREE, SUIT.SPADES)));
+    expect(parseCard('jc')).toEqual(ok(makeCard(RANK.JACK, SUIT.CLUBS)));
+    expect(parseCard('Ah')).toEqual(ok(makeCard(RANK.ACE, SUIT.HEARTS)));
+    expect(parseCard('10D')).toEqual(ok(makeCard(RANK.TEN, SUIT.DIAMONDS)));
+  });
+
+  it('ignores surrounding spaces', () => {
+    expect(parseCard('  Q♦ ')).toEqual(ok(makeCard(RANK.QUEEN, SUIT.DIAMONDS)));
+  });
+
+  it('can read back every card that cardToString writes', () => {
+    for (const card of makeDeck()) {
+      expect(parseCard(cardToString(card))).toEqual(ok(card));
+    }
+  });
+
+  it('returns an error (does not crash) for bad text', () => {
+    const badInputs = ['', '1♠', '11♠', '3x', '♠', '10', 'joker'];
+    for (const input of badInputs) {
+      expect(parseCard(input)).toEqual(err({ code: 'INVALID_CARD', input }));
+    }
+  });
+});
+
+describe('parseCards', () => {
+  it('reads a space-separated list', () => {
+    expect(parseCards('3♠ 4♠ 5♠')).toEqual(
+      ok([
+        makeCard(RANK.THREE, SUIT.SPADES),
+        makeCard(RANK.FOUR, SUIT.SPADES),
+        makeCard(RANK.FIVE, SUIT.SPADES),
+      ]),
+    );
+  });
+
+  it('gives an empty list for empty text', () => {
+    expect(parseCards('   ')).toEqual(ok([]));
+  });
+
+  it('fails on the first bad card and says which one', () => {
+    expect(parseCards('3♠ 4x 5♠')).toEqual(err({ code: 'INVALID_CARD', input: '4x' }));
   });
 });
