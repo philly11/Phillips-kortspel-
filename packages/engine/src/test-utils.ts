@@ -6,6 +6,7 @@
  * should fail loudly and immediately, not be handled gracefully.
  */
 import { type Card, parseCard, parseCards } from './card';
+import { type Combo, detectCombo } from './combo';
 
 /** One card from text, e.g. card('7♥'). */
 export function card(text: string): Card {
@@ -21,6 +22,15 @@ export function cards(text: string): Card[] {
   const result = parseCards(text);
   if (!result.ok) {
     throw new Error(`Bad card in test: "${result.error.input}"`);
+  }
+  return result.value;
+}
+
+/** A combo from space-separated text, e.g. combo('7♠ 7♥'). Throws if it isn't a legal combo. */
+export function combo(text: string): Combo {
+  const result = detectCombo(cards(text));
+  if (!result.ok) {
+    throw new Error(`Not a combo in test: "${text}" (${result.error.code})`);
   }
   return result.value;
 }
