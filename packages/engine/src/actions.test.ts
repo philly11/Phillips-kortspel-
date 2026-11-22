@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { isGameOver, playCards } from './actions';
+import { applyAction, isGameOver, passTurn, playCards } from './actions';
 import type { GameState } from './game';
 import { err } from './result';
 import { cards, combo, makeState } from './test-utils';
+
 
 /** Play in a test, failing loudly if the engine refuses. */
 function play(state: GameState, text: string): GameState {
@@ -112,5 +113,118 @@ describe('playCards: finishing', () => {
   it('refuses any play once the game is over', () => {
     const over = makeState({ hands: ['', '', '', '8♠'], finished: [0, 1, 2], currentPlayer: 3 });
     expect(playCards(over, cards('8♠'))).toEqual(err({ code: 'GAME_OVER' }));
+  });
+});
+
+
+/** Pass in a test, failing loudly if the engine refuses. */
+function pass(state: GameState): GameState {
+  const result = passTurn(state);
+  if (!result.ok) {
+    throw new Error(`pass refused: ${result.error.code}`);
+  }
+  return result.value;
+}
+
+describe('passTurn', () => {
+  // Seat 0 has played 9♠; it's seat 1's turn.
+  const trick = makeState({
+    hands: ['3♠', '4♠ K♦', '5♠ A♦', '6♠ 2♦'],
+    table: '9♠',
+    lastPlayedBy: 0,
+    currentPlayer: 1,
+  });
+
+  it('marks the player as passed and moves on to the next seat', () => {
+    const after = pass(trick);
+    expect(after.passed).toEqual([false, true, false, false]);
+    expect(after.currentPlayer).toBe(2);
+    expect(after.table).toEqual(combo('9♠')); // the table stays
+  });
+
+  it('a player who passed is skipped for the rest of the trick', () => {
+    const afterPass = pass(trick); // seat 1 passes
+    const afterPlay = play(afterPass, 'A♦'); // seat 2 beats with A♦
+    expect(afterPlay.currentPlayer).toBe(3);
+    const afterPass3 = pass(afterPlay); // seat 3 passes
+    expect(afterPass3.currentPlayer).toBe(0); // seat 1 is skipped
+  });
+
+  it('cannot pass when leading a new trick', () => {
+    const leading = makeState({ hands: ['3♠', '4♠', '5♠', '6♠'] });
+    expect(passTurn(leading)).toEqual(err({ code: 'CANNOT_PASS_ON_LEAD' }));
+  });
+
+  it('cannot pass once the game is over', () => {
+    const over = makeState({ hands: ['', '', '', '8♠'], finished: [0, 1, 2], currentPlayer: 3, table: '9♠' });
+    expect(passTurn(over)).toEqual(err({ code: 'GAME_OVER' }));
+  });
+});
+
+describe('end of a trick', () => {
+  it('when everyone else passes, the last player to play leads a fresh trick', () => {
+    const trick = makeState({
+      hands: ['3♠ 7♦', '4♠', '5♠', '6♠'],
+      table: '9♠',
+      lastPlayedBy: 0,
+      currentPlayer: 1,
+    });
+    const after = pass(pass(pass(trick))); // seats 1, 2 and 3 pass
+    expect(after.table).toBe(null);
+    expect(after.lastPlayedBy).toBe(null);
+    expect(after.passed).toEqual([false, false, false, false]);
+    expect(after.currentPlayer).toBe(0);
+  });
+
+  it('after a player goes out, the others still get a chance to beat their cards', () => {
+    const state = makeState({ hands: ['9♠', '4♠ K♦', '5♠', '6♠'] });
+    const afterOut = play(state, '9♠'); // seat 0 goes out
+    expect(afterOut.finished).toEqual([0]);
+    expect(afterOut.currentPlayer).toBe(1);
+    const afterBeat = play(afterOut, 'K♦'); // seat 1 beats it...
+    const afterPasses = pass(pass(afterBeat)); // ...seats 2 and 3 pass
+    expect(afterPasses.table).toBe(null);
+    expect(afterPasses.currentPlayer).toBe(1); // the highest card leads next
+  });
+
+  it('if everyone passes on the cards of a player who went out, the next player after them leads', () => {
+    const state = makeState({ hands: ['9♠', '4♠', '5♠', '6♠'] });
+    const afterOut = play(state, '9♠'); // seat 0 goes out
+    const afterPasses = pass(pass(pass(afterOut))); // seats 1, 2, 3 pass
+    expect(afterPasses.table).toBe(null);
+    expect(afterPasses.currentPlayer).toBe(1);
+  });
+
+  it('...skipping anyone who has already finished', () => {
+    const state = makeState({ hands: ['9♠', '', '5♠', '6♠'], finished: [1] });
+    const afterOut = play(state, '9♠'); // seat 0 goes out; seat 1 is already out
+    const afterPasses = pass(pass(afterOut)); // seats 2 and 3 pass
+    expect(afterPasses.currentPlayer).toBe(2);
+  });
+});
+
+describe('applyAction', () => {
+  it('plays or passes depending on the action', () => {
+    const state = makeState({ hands: ['3♠ 9♠', '4♠', '5♠', '6♠'] });
+    const afterPlay = applyAction(state, { type: 'play', cards: cards('9♠') });
+    expect(afterPlay).toEqual(playCards(state, cards('9♠')));
+    if (afterPlay.ok) {
+      expect(applyAction(afterPlay.value, { type: 'pass' })).toEqual(passTurn(afterPlay.value));
+    }
+  });
+
+  it('plays a whole tiny game from 3♠ to the end', () => {
+    let state = makeState({ hands: ['3♠ 9♦', '4♠', '5♠ 5♦', '6♠ 6♦'], requiredCard: '3♠' });
+    state = play(state, '3♠'); // seat 0 leads with 3♠
+    state = play(state, '4♠'); // seat 1 beats it and goes out (1st place)
+    state = play(state, '5♠'); // seat 2
+    state = play(state, '6♠'); // seat 3
+    state = play(state, '9♦'); // seat 0 beats it and goes out (2nd place)
+    state = pass(state); // seat 2 passes
+    state = pass(state); // seat 3 passes -> trick over; seat 0 is out, so seat 2 leads
+    expect(state.currentPlayer).toBe(2);
+    state = play(state, '5♦'); // seat 2 goes out (3rd place)
+    expect(state.finished).toEqual([1, 0, 2]);
+    expect(isGameOver(state)).toBe(true); // seat 3 is last
   });
 });

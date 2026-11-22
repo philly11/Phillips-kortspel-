@@ -16,13 +16,24 @@ export interface ActionError {
     | BeatError['code']
     | 'GAME_OVER'
     | 'CARDS_NOT_IN_HAND'
-    | 'MISSING_REQUIRED_CARD';
+    | 'MISSING_REQUIRED_CARD'
+    | 'CANNOT_PASS_ON_LEAD';
 }
 
 /**
- * The current player plays `cards`. Returns a NEW state, or the reason it's not allowed.
- * (Passing, and what happens when a trick ends, come in the next step.)
+ * THE entry point of the engine: the current player does `action`.
+ * Returns the NEW state, or the reason the action is not allowed.
  */
+export function applyAction(state: GameState, action: Action): Result<GameState, ActionError> {
+  switch (action.type) {
+    case 'play':
+      return playCards(state, action.cards);
+    case 'pass':
+      return passTurn(state);
+  }
+}
+
+/** The current player plays `cards`. */
 export function playCards(state: GameState, cards: readonly Card[]): Result<GameState, ActionError> {
   if (isGameOver(state)) {
     return err({ code: 'GAME_OVER' });
@@ -68,7 +79,27 @@ export function playCards(state: GameState, cards: readonly Card[]): Result<Game
     lastPlayedBy: player,
     requiredCard: null,
   };
-  return ok({ ...next, currentPlayer: nextPlayer(next, player) });
+  return ok(advanceTurn(next, player));
+}
+
+/**
+ * The current player passes: they are out until this trick ends.
+ * You can't pass when leading a new trick (there's nothing to pass on).
+ */
+export function passTurn(state: GameState): Result<GameState, ActionError> {
+  if (isGameOver(state)) {
+    return err({ code: 'GAME_OVER' });
+  }
+  if (state.table === null) {
+    return err({ code: 'CANNOT_PASS_ON_LEAD' });
+  }
+
+  const player = state.currentPlayer;
+  const next: GameState = {
+    ...state,
+    passed: state.passed.map((hasPassed, seat) => hasPassed || seat === player),
+  };
+  return ok(advanceTurn(next, player));
 }
 
 /** The game ends when only one player still has cards. */
@@ -88,4 +119,48 @@ export function nextPlayer(state: GameState, from: PlayerId): PlayerId {
     }
   }
   return from;
+}
+
+/**
+ * After a play or a pass by `actor`: either the trick is over and a new one
+ * starts, or the turn simply moves on to the next player still in the trick.
+ */
+function advanceTurn(state: GameState, actor: PlayerId): GameState {
+  if (isGameOver(state)) {
+    return state;
+  }
+  if (isTrickOver(state)) {
+    return startNewTrick(state);
+  }
+  return { ...state, currentPlayer: nextPlayer(state, actor) };
+}
+
+/**
+ * A trick is over when every player still in the game, except the one whose
+ * combo is on the table, has passed. Nobody is left to beat it.
+ */
+function isTrickOver(state: GameState): boolean {
+  for (let seat = 0; seat < PLAYER_COUNT; seat++) {
+    const stillPlaying = !state.finished.includes(seat);
+    if (stillPlaying && seat !== state.lastPlayedBy && !state.passed[seat]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Clear the table and let everyone back in. The player who played last leads.
+ * If they have gone out, the next player after them (still in the game) leads.
+ */
+function startNewTrick(state: GameState): GameState {
+  const fresh: GameState = {
+    ...state,
+    table: null,
+    lastPlayedBy: null,
+    passed: state.passed.map(() => false),
+  };
+  const winner = state.lastPlayedBy ?? state.currentPlayer;
+  const leader = state.finished.includes(winner) ? nextPlayer(fresh, winner) : winner;
+  return { ...fresh, currentPlayer: leader };
 }
