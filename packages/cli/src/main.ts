@@ -2,8 +2,10 @@
  * Play Tiến Lên in the terminal: 4 players, hot-seat (everyone shares the keyboard).
  *
  * This file is all input/output: reading what you type and printing the table.
- * Every rule decision is made by the engine through applyAction. The CLI never
- * checks legality itself.
+ * Every rule decision is made by the engine. The CLI never checks legality itself.
+ *
+ * In hot-seat, the CLI plays the role a server will play later: it holds the full
+ * GameState, but only ever SHOWS a player their own view(state, playerId).
  */
 import { argv, stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
@@ -12,15 +14,20 @@ import {
   type ActionError,
   type Card,
   type GameState,
+  type PlayerView,
   type Result,
+  type RevealError,
   PLAYER_COUNT,
   applyAction,
   cardToString,
   createGame,
   err,
+  hideCards,
   isGameOver,
   ok,
   parseCards,
+  revealCards,
+  view,
 } from '@kortspel/engine';
 
 /** A friendly message for every reason the engine can refuse an action. */
@@ -38,46 +45,70 @@ const ERROR_MESSAGES: Record<ActionError['code'], string> = {
   CANNOT_PASS_ON_LEAD: 'You are leading a new trick, so you cannot pass. Play anything.',
 };
 
+/** A friendly message for every reason the engine can refuse a reveal. */
+const REVEAL_ERROR_MESSAGES: Record<RevealError['code'], string> = {
+  INVALID_PLAYER: 'That player does not exist.',
+  EMPTY: 'Say which cards to show, e.g. "show 2h 2c".',
+  CARDS_NOT_IN_HAND: 'You can only show cards you actually have.',
+};
+
+/** Everything the player can type. */
+type Command =
+  | { readonly kind: 'action'; readonly action: Action }
+  | { readonly kind: 'show'; readonly cards: readonly Card[] }
+  | { readonly kind: 'hide' };
+
 const name = (seat: number): string => `Player ${seat + 1}`;
 const show = (cards: readonly Card[]): string => cards.map(cardToString).join(' ');
 
-/** Turn what the player typed into an Action, e.g. "pass" or "3s 4s 5s". */
-function parseInput(text: string): Result<Action, string> {
+/** Turn what the player typed into a Command, e.g. "pass", "show 2h", "hide" or "3s 4s 5s". */
+function parseInput(text: string): Result<Command, string> {
   const lower = text.toLowerCase();
   if (lower === 'p' || lower === 'pass') {
-    return ok({ type: 'pass' });
+    return ok({ kind: 'action', action: { type: 'pass' } });
   }
-  const cards = parseCards(text);
+  if (lower === 'hide') {
+    return ok({ kind: 'hide' });
+  }
+
+  const isShow = lower.startsWith('show');
+  const cardText = isShow ? text.slice('show'.length) : text;
+  const cards = parseCards(cardText);
   if (!cards.ok) {
     return err(`I don't understand "${cards.error.input}". Try e.g. 3s, 10d, Qh or 3♠.`);
   }
-  return ok({ type: 'play', cards: cards.value });
+  return ok(
+    isShow
+      ? { kind: 'show', cards: cards.value }
+      : { kind: 'action', action: { type: 'play', cards: cards.value } },
+  );
 }
 
-/** Print the table and the current player's hand. */
-function printTurn(state: GameState): void {
-  const player = state.currentPlayer;
+/** Print the table from ONE player's point of view. */
+function printTurn(v: PlayerView): void {
   console.log('\n────────────────────────────────────────');
-  if (state.table === null) {
+  if (v.table === null) {
     console.log('Table: empty (new trick)');
   } else {
-    console.log(`Table: ${show(state.table.cards)}   played by ${name(state.lastPlayedBy ?? player)}`);
+    console.log(`Table: ${show(v.table.cards)}   played by ${name(v.lastPlayedBy ?? v.me)}`);
   }
 
-  const others: string[] = [];
   for (let seat = 0; seat < PLAYER_COUNT; seat++) {
-    if (seat === player) continue;
-    const status = state.finished.includes(seat)
+    if (seat === v.me) continue;
+    const status = v.finished.includes(seat)
       ? 'out'
-      : `${state.hands[seat].length} cards${state.passed[seat] ? ', passed' : ''}`;
-    others.push(`${name(seat)}: ${status}`);
+      : `${v.cardCounts[seat]} cards${v.passed[seat] ? ', passed' : ''}`;
+    const showing = v.revealed[seat].length > 0 ? `, showing ${show(v.revealed[seat])}` : '';
+    console.log(`  ${name(seat)}: ${status}${showing}`);
   }
-  console.log(others.join('  |  '));
 
-  console.log(`\n${name(player)}'s turn. Your hand:`);
-  console.log(`  ${show(state.hands[player])}`);
-  if (state.requiredCard !== null) {
-    console.log(`  (Your play must include ${cardToString(state.requiredCard)}.)`);
+  console.log(`\n${name(v.me)}'s turn. Your hand:`);
+  console.log(`  ${show(v.hand)}`);
+  if (v.revealed[v.me].length > 0) {
+    console.log(`  (You are showing ${show(v.revealed[v.me])} to the table.)`);
+  }
+  if (v.requiredCard !== null) {
+    console.log(`  (Your play must include ${cardToString(v.requiredCard)}.)`);
   }
 }
 
@@ -109,11 +140,19 @@ async function main(): Promise<void> {
 
   console.log(`Tiến Lên: 4 players, hot-seat. Seed ${seed} (run "pnpm start ${seed}" to replay this deal).`);
   console.log('Type cards like "3s 4s 5s" or "3♠ 4♠ 5♠" (s ♠, c ♣, d ♦, h ♥), "pass", or "quit".');
+  console.log('Taunt the table with "show 2h 2c", and turn them face-down again with "hide".');
 
   const rl = createInterface({ input: stdin, output: stdout });
 
   while (!isGameOver(state)) {
-    printTurn(state);
+    const me = state.currentPlayer;
+    const myView = view(state, me);
+    if (!myView.ok) {
+      console.log(`Something went wrong: ${myView.error.code}`);
+      break;
+    }
+    printTurn(myView.value);
+
     const text = (await rl.question('> ')).trim();
     if (text === 'quit' || text === 'q') {
       console.log('Bye!');
@@ -121,19 +160,38 @@ async function main(): Promise<void> {
       return;
     }
 
-    const action = parseInput(text);
-    if (!action.ok) {
-      console.log(`✗ ${action.error}`);
+    const command = parseInput(text);
+    if (!command.ok) {
+      console.log(`✗ ${command.error}`);
       continue;
     }
 
-    const result = applyAction(state, action.value);
+    // Taunts: reveal or hide. They never use up your turn.
+    if (command.value.kind === 'show' || command.value.kind === 'hide') {
+      const result =
+        command.value.kind === 'show'
+          ? revealCards(state, me, command.value.cards)
+          : hideCards(state, me);
+      if (!result.ok) {
+        console.log(`✗ ${REVEAL_ERROR_MESSAGES[result.error.code]}`);
+        continue;
+      }
+      console.log(
+        command.value.kind === 'show'
+          ? `😈 ${name(me)} shows ${show(command.value.cards)} to the table!`
+          : `🙈 ${name(me)} hides their cards again.`,
+      );
+      state = result.value;
+      continue;
+    }
+
+    const result = applyAction(state, command.value.action);
     if (!result.ok) {
       console.log(`✗ ${ERROR_MESSAGES[result.error.code]}`);
       continue;
     }
 
-    printWhatHappened(state, result.value, action.value);
+    printWhatHappened(state, result.value, command.value.action);
     state = result.value;
   }
 
