@@ -13,6 +13,7 @@ import {
 } from '@kortspel/engine';
 import { ERROR_MESSAGES } from './messages';
 import { PlayingCard } from './PlayingCard';
+import { Seat } from './Seat';
 import { theme } from './theme';
 
 /**
@@ -125,28 +126,47 @@ export function App() {
   const v = myView.value;
   const overlap = theme.card.width * theme.card.handOverlap;
 
+  // Seats are placed relative to whoever is at the bottom ("me"):
+  // the next player in turn order sits on my right, then across, then on my left.
+  const rightSeat = (v.me + 1) % PLAYER_COUNT;
+  const topSeat = (v.me + 2) % PLAYER_COUNT;
+  const leftSeat = (v.me + 3) % PLAYER_COUNT;
+
   return (
-    <main style={pageStyle}>
-      {/* Top: title and the other players */}
-      <header style={{ textAlign: 'center' }}>
-        <h1 style={{ margin: 0, fontSize: 40 }}>Tiến Lên</h1>
-        <p style={{ margin: '8px 0 0', color: theme.colors.tableTextMuted }}>
-          {Array.from({ length: PLAYER_COUNT }, (_, seat) => seat)
-            .filter((seat) => seat !== v.me)
-            .map((seat) => {
-              const status = v.finished.includes(seat)
-                ? 'out'
-                : `${v.cardCounts[seat]} cards${v.passed[seat] ? ', passed' : ''}`;
-              return `${name(seat)}: ${status}`;
-            })
-            .join('   ·   ')}
-        </p>
+    <main
+      style={{
+        ...pageStyle,
+        display: 'grid',
+        gridTemplateColumns: '1fr 2fr 1fr',
+        gridTemplateRows: 'auto 1fr auto',
+        gridTemplateAreas: `
+          "title  top    ."
+          "left   center right"
+          "me     me     me"
+        `,
+        alignItems: 'center',
+        justifyItems: 'center',
+      }}
+    >
+      <header style={{ gridArea: 'title', justifySelf: 'start', alignSelf: 'start' }}>
+        <h1 style={{ margin: 0, fontSize: 28 }}>Tiến Lên</h1>
+        <p style={{ margin: '2px 0 0', fontSize: 14, color: theme.colors.tableTextMuted }}>Seed {state.seed}</p>
       </header>
 
-      {/* Middle: the combo to beat */}
-      <section style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <div style={{ gridArea: 'top' }}>
+        <Seat seat={topSeat} view={v} />
+      </div>
+      <div style={{ gridArea: 'left' }}>
+        <Seat seat={leftSeat} view={v} />
+      </div>
+      <div style={{ gridArea: 'right' }}>
+        <Seat seat={rightSeat} view={v} />
+      </div>
+
+      {/* Middle of the table: the combo to beat */}
+      <section style={{ gridArea: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         {v.table === null ? (
-          <p style={{ margin: 0, fontSize: 20, color: theme.colors.tableTextMuted }}>
+          <p style={{ margin: 0, fontSize: 20, color: theme.colors.tableTextMuted, textAlign: 'center' }}>
             New trick: {name(v.me)} leads
             {v.requiredCard !== null && ` (must include ${cardToString(v.requiredCard)})`}
           </p>
@@ -165,7 +185,7 @@ export function App() {
       </section>
 
       {/* Bottom: whose turn, the hand, the buttons, the message */}
-      <section style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+      <section style={{ gridArea: 'me', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
         <p style={{ margin: 0, fontSize: 22 }}>{name(v.me)}'s turn</p>
 
         <div style={{ display: 'flex', paddingTop: theme.card.selectedLift }}>

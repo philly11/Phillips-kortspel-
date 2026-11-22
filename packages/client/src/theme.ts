@@ -27,6 +27,12 @@ export const theme = {
     /** Messages under the buttons. */
     errorText: '#FFB4B4',
     infoText: '#CFE8DD',
+    /** The back of a card: a red panel with a light diagonal pattern inside a cream frame. */
+    cardBack: '#B8322D',
+    cardBackPattern: 'rgba(255, 255, 255, 0.16)',
+    /** The little badges on each seat ("5 cards", "Passed", "Out · 1st"). */
+    badge: 'rgba(0, 0, 0, 0.28)',
+    badgeText: '#FFFFFF',
   },
 
   font: {
@@ -52,6 +58,16 @@ export const theme = {
     handOverlap: 0.4,
     /** How far a selected card pops up, in px. */
     selectedLift: 28,
+    /** Opponents' face-down cards. */
+    opponentWidth: 36,
+    opponentOverlap: 0.62,
+    /** Cards an opponent has revealed (the taunt). */
+    revealedWidth: 46,
+  },
+
+  seat: {
+    /** A player who has passed this trick is faded to this opacity. */
+    passedOpacity: 0.45,
   },
 
   motion: {
