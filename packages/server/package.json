@@ -1,0 +1,24 @@
+{
+  "name": "@kortspel/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@colyseus/sdk": "^0.18.10",
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@colyseus/core": "^0.18.29",
+    "@colyseus/schema": "^5.0.50",
+    "@colyseus/ws-transport": "^0.18.5",
+    "@kortspel/engine": "workspace:*"
+  }
+}
