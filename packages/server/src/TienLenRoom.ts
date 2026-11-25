@@ -12,7 +12,7 @@ import {
   revealCards,
   view,
 } from '@kortspel/engine';
-import type { EventMessage, LobbyMessage, RefusedMessage } from './protocol';
+import { type EventMessage, type LobbyMessage, MAX_NAME_LENGTH, type RefusedMessage } from './protocol';
 
 /** Letters for join codes. No I or O, so nobody confuses them with 1 and 0. */
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -53,6 +53,23 @@ function cardList(value: unknown): Card[] | null {
   return items.every((item): item is number => typeof item === 'number') ? items : null;
 }
 
+/**
+ * Turn whatever name a client sent into a tidy one: text only, no control characters,
+ * single spaces, at most MAX_NAME_LENGTH characters. Empty or missing → "Player 3".
+ * (We never insert names as HTML, so a name like "<b>hi</b>" just shows as text.)
+ */
+function cleanName(raw: unknown, seat: PlayerId): string {
+  const fallback = `Player ${seat + 1}`;
+  if (typeof raw !== 'string') return fallback;
+  const name = raw
+    .replace(/[\u0000-\u001F\u007F]/g, '') // invisible control characters
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_NAME_LENGTH)
+    .trim();
+  return name === '' ? fallback : name;
+}
+
 /** One table: up to 4 players, joined with a private code. The server holds the real game. */
 export class TienLenRoom extends Room {
   maxClients = PLAYER_COUNT;
@@ -62,6 +79,9 @@ export class TienLenRoom extends Room {
    * The SERVER decides who you are: a client can never claim another seat.
    */
   private seats = new Map<string, PlayerId>();
+
+  /** names[seat] = the name of whoever sits there (or null for an empty seat). */
+  private names: (string | null)[] = Array.from({ length: PLAYER_COUNT }, () => null);
 
   /** The real game. `null` until all four seats are filled. Only the server ever sees all of it. */
   private game: GameState | null = null;
@@ -86,10 +106,11 @@ export class TienLenRoom extends Room {
     console.log(`[${this.roomId}] room created`);
   }
 
-  onJoin(client: Client) {
+  onJoin(client: Client, options?: unknown) {
     const seat = this.firstFreeSeat();
     this.seats.set(client.sessionId, seat);
-    console.log(`[${this.roomId}] ${client.sessionId} sat down in seat ${seat}`);
+    this.names[seat] = cleanName(field(options, 'name'), seat);
+    console.log(`[${this.roomId}] ${this.names[seat]} sat down in seat ${seat}`);
     this.sendLobbyToAll();
 
     if (this.game === null && this.seats.size === PLAYER_COUNT) {
@@ -101,7 +122,11 @@ export class TienLenRoom extends Room {
   }
 
   onLeave(client: Client) {
-    console.log(`[${this.roomId}] ${client.sessionId} left seat ${this.seats.get(client.sessionId)}`);
+    const seat = this.seats.get(client.sessionId);
+    if (seat !== undefined) {
+      console.log(`[${this.roomId}] ${this.names[seat]} left seat ${seat}`);
+      this.names[seat] = null;
+    }
     // For now the seat is freed; the game itself keeps going, and anyone who joins
     // with the code takes over that seat. (Proper reconnecting comes in a later step.)
     this.seats.delete(client.sessionId);
@@ -254,7 +279,9 @@ export class TienLenRoom extends Room {
     const message: LobbyMessage = {
       code: this.roomId,
       yourSeat: seat,
-      seatsTaken: [...this.seats.values()].sort(),
+      players: [...this.seats.values()]
+        .sort((a, b) => a - b)
+        .map((s) => ({ seat: s, name: this.names[s] ?? `Player ${s + 1}` })),
     };
     client.send('lobby', message);
   }

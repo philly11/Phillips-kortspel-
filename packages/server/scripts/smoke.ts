@@ -1,6 +1,6 @@
 /**
  * Checks the server end to end, without any UI. Pretends to be 4 players:
- * they join a room, the game starts, some try to cheat, and someone opens with 3♠.
+ * they join a room with names, the game starts, some try to cheat, and someone opens with 3♠.
  *
  * Start the server first (pnpm dev), then run this in a second terminal (pnpm smoke).
  */
@@ -39,14 +39,22 @@ function check(passed: boolean, label: string) {
 async function main() {
   const client = new Client(SERVER);
 
-  // ── Four players meet ──
-  const first = await client.create('tienlen');
+  // ── Four players meet (one with a messy name, one with none) ──
+  const first = await client.create('tienlen', { name: 'Anna' });
   console.log(`Created a room. Join code: ${first.roomId}`);
   const players = [listen(first, 'A')];
-  for (const label of ['B', 'C', 'D']) {
-    players.push(listen(await client.joinById(first.roomId), label));
+  const joinOptions = [{ name: '  Bao  ' }, { name: 'Chi with a very long name indeed' }, {}];
+  for (const [index, options] of joinOptions.entries()) {
+    players.push(listen(await client.joinById(first.roomId, options), ['B', 'C', 'D'][index]));
   }
   await wait(500);
+
+  const names = players[0].lobby?.players.map((p) => p.name) ?? [];
+  console.log(`Names at the table: ${names.map((n) => `"${n}"`).join(', ')}`);
+  check(
+    names.join('|') === 'Anna|Bao|Chi with a very|Player 4',
+    'names are cleaned up: trimmed, cut to 16 characters, and a default for a missing name',
+  );
 
   const views = players.map((p) => p.view);
   check(views.every((v) => v !== undefined), 'all four players received a view when the 4th sat down');

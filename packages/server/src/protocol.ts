@@ -9,6 +9,17 @@ import type { ActionError, Card, PlayerId, PlayerView, RevealError } from '@kort
 
 // ── Client → server ──────────────────────────────────────────────────────
 
+/**
+ * Join options: sent once, with `client.create('tienlen', options)` or
+ * `client.joinById(code, options)`. The server cleans the name up (see MAX_NAME_LENGTH).
+ */
+export interface JoinOptions {
+  readonly name?: string;
+}
+
+/** Names are trimmed and cut to at most this many characters. */
+export const MAX_NAME_LENGTH = 16;
+
 /** 'play': play these cards, optionally slamming them. */
 export interface PlayRequest {
   readonly cards: readonly Card[];
@@ -24,14 +35,20 @@ export interface RevealRequest {
 
 // ── Server → client ──────────────────────────────────────────────────────
 
+/** One person sitting at the table. */
+export interface SeatedPlayer {
+  readonly seat: PlayerId;
+  readonly name: string;
+}
+
 /** 'lobby': who is in the room. Sent whenever someone joins or leaves. */
 export interface LobbyMessage {
   /** The join code to share with friends. */
   readonly code: string;
   /** Which seat you sit in (0–3). */
   readonly yourSeat: PlayerId;
-  /** Which seats are taken, including yours. */
-  readonly seatsTaken: readonly PlayerId[];
+  /** Everyone at the table (including you), sorted by seat. */
+  readonly players: readonly SeatedPlayer[];
 }
 
 /** 'view': your personal view of the game. Never contains other players' hands. */
