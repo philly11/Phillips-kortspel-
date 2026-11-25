@@ -12,7 +12,13 @@ import {
   revealCards,
   view,
 } from '@kortspel/engine';
-import { type EventMessage, type LobbyMessage, MAX_NAME_LENGTH, type RefusedMessage } from './protocol';
+import {
+  type EventMessage,
+  type LobbyMessage,
+  MAX_NAME_LENGTH,
+  RECONNECT_SECONDS,
+  type RefusedMessage,
+} from './protocol';
 
 /** Letters for join codes. No I or O, so nobody confuses them with 1 and 0. */
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -83,6 +89,9 @@ export class TienLenRoom extends Room {
   /** names[seat] = the name of whoever sits there (or null for an empty seat). */
   private names: (string | null)[] = Array.from({ length: PLAYER_COUNT }, () => null);
 
+  /** connected[seat] = false while that player's connection has dropped and we hold their seat. */
+  private connected: boolean[] = Array.from({ length: PLAYER_COUNT }, () => false);
+
   /** The real game. `null` until all four seats are filled. Only the server ever sees all of it. */
   private game: GameState | null = null;
 
@@ -110,6 +119,7 @@ export class TienLenRoom extends Room {
     const seat = this.firstFreeSeat();
     this.seats.set(client.sessionId, seat);
     this.names[seat] = cleanName(field(options, 'name'), seat);
+    this.connected[seat] = true;
     console.log(`[${this.roomId}] ${this.names[seat]} sat down in seat ${seat}`);
     this.sendLobbyToAll();
 
@@ -121,14 +131,44 @@ export class TienLenRoom extends Room {
     }
   }
 
+  /**
+   * The connection dropped WITHOUT the player choosing to leave (Wi-Fi blip, tab refreshed,
+   * phone went to sleep). Keep their seat and hand for RECONNECT_SECONDS. If they come back,
+   * onReconnect runs; if not, Colyseus calls onLeave and the seat is freed.
+   */
+  async onDrop(client: Client) {
+    const seat = this.seats.get(client.sessionId);
+    if (seat === undefined) return;
+    this.connected[seat] = false;
+    console.log(`[${this.roomId}] ${this.names[seat]} dropped; holding seat ${seat} for ${RECONNECT_SECONDS}s`);
+    this.sendLobbyToAll();
+    try {
+      await this.allowReconnection(client, RECONNECT_SECONDS);
+    } catch {
+      // Time ran out. Nothing to do here: Colyseus calls onLeave next.
+    }
+  }
+
+  /** A dropped player is back: same seat, same hand. Bring them up to date. */
+  onReconnect(client: Client) {
+    const seat = this.seats.get(client.sessionId);
+    if (seat === undefined) return;
+    this.connected[seat] = true;
+    console.log(`[${this.roomId}] ${this.names[seat]} reconnected to seat ${seat}`);
+    this.sendLobbyToAll();
+    this.sendView(client);
+  }
+
+  /** The player is gone for good: they pressed Leave, or didn't reconnect in time. */
   onLeave(client: Client) {
     const seat = this.seats.get(client.sessionId);
     if (seat !== undefined) {
       console.log(`[${this.roomId}] ${this.names[seat]} left seat ${seat}`);
       this.names[seat] = null;
+      this.connected[seat] = false;
     }
-    // For now the seat is freed; the game itself keeps going, and anyone who joins
-    // with the code takes over that seat. (Proper reconnecting comes in a later step.)
+    // The seat is freed; the game itself keeps going, and anyone who joins
+    // with the code takes over that seat (and its hand).
     this.seats.delete(client.sessionId);
     this.sendLobbyToAll();
   }
@@ -281,7 +321,7 @@ export class TienLenRoom extends Room {
       yourSeat: seat,
       players: [...this.seats.values()]
         .sort((a, b) => a - b)
-        .map((s) => ({ seat: s, name: this.names[s] ?? `Player ${s + 1}` })),
+        .map((s) => ({ seat: s, name: this.names[s] ?? `Player ${s + 1}`, connected: this.connected[s] })),
     };
     client.send('lobby', message);
   }

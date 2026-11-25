@@ -39,7 +39,12 @@ export interface RevealRequest {
 export interface SeatedPlayer {
   readonly seat: PlayerId;
   readonly name: string;
+  /** False while their connection has dropped and the server is holding their seat. */
+  readonly connected: boolean;
 }
+
+/** How long (seconds) the server holds a seat for a player whose connection dropped. */
+export const RECONNECT_SECONDS = 60;
 
 /** 'lobby': who is in the room. Sent whenever someone joins or leaves. */
 export interface LobbyMessage {
