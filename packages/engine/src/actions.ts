@@ -5,9 +5,12 @@ import { type GameState, type PlayerId, PLAYER_COUNT } from './game';
 import { type Result, ok, err } from './result';
 import { forgetPlayedCards } from './reveal';
 
-/** Something a player can do on their turn. */
+/**
+ * Something a player can do on their turn.
+ * A play can be SLAMMED: same rules, just a louder entrance (`slam` is optional, default false).
+ */
 export type Action =
-  | { readonly type: 'play'; readonly cards: readonly Card[] }
+  | { readonly type: 'play'; readonly cards: readonly Card[]; readonly slam?: boolean }
   | { readonly type: 'pass' };
 
 /** Why an action was refused. Includes every combo and beat error, so callers see the real reason. */
@@ -28,21 +31,24 @@ export interface ActionError {
 export function applyAction(state: GameState, action: Action): Result<GameState, ActionError> {
   switch (action.type) {
     case 'play':
-      return playCards(state, action.cards);
+      return playCards(state, action.cards, action.slam ?? false);
     case 'pass':
       return passTurn(state);
   }
 }
 
-/** The current player plays `cards`. */
-export function playCards(state: GameState, cards: readonly Card[]): Result<GameState, ActionError> {
+/** The current player plays `cards`, optionally slamming them down. */
+export function playCards(
+  state: GameState,
+  cards: readonly Card[],
+  slam = false,
+): Result<GameState, ActionError> {
   if (isGameOver(state)) {
     return err({ code: 'GAME_OVER' });
   }
 
   const player = state.currentPlayer;
   const hand = state.hands[player];
-  
 
   // 1. Is it a combo at all?
   const combo = detectCombo(cards);
@@ -61,11 +67,13 @@ export function playCards(state: GameState, cards: readonly Card[]): Result<Game
   }
 
   // 4. If there's something on the table, the play must beat it.
+  let chopped = false;
   if (state.table !== null) {
     const beat = checkBeat(state.table, combo.value);
     if (!beat.ok) {
       return err(beat.error);
     }
+    chopped = beat.value === 'chop';
   }
 
   // All checks passed: build the next snapshot.
@@ -81,6 +89,7 @@ export function playCards(state: GameState, cards: readonly Card[]): Result<Game
     lastPlayedBy: player,
     requiredCard: null,
     revealed: forgetPlayedCards(state.revealed, player, cards),
+    lastPlay: { slammed: slam, chopped },
   };
   return ok(advanceTurn(next, player));
 }
@@ -161,6 +170,7 @@ function startNewTrick(state: GameState): GameState {
     ...state,
     table: null,
     lastPlayedBy: null,
+    lastPlay: null,
     passed: state.passed.map(() => false),
   };
   const winner = state.lastPlayedBy ?? state.currentPlayer;

@@ -1,6 +1,6 @@
 import type { Card } from './card';
 import type { Combo } from './combo';
-import { type GameState, type Hand, type PlayerId, isValidPlayer } from './game';
+import { type GameState, type Hand, type LastPlay, type PlayerId, isValidPlayer } from './game';
 import { type Result, ok, err } from './result';
 
 /**
@@ -26,6 +26,8 @@ export interface PlayerView {
   readonly requiredCard: Card | null;
   /** revealed[seat] = cards that player chose to show to the table. Public on purpose. */
   readonly revealed: readonly Hand[];
+  /** How the combo on the table was played (slammed? chopped?). Public: everyone saw it. */
+  readonly lastPlay: LastPlay | null;
 }
 
 export interface ViewError {
@@ -54,5 +56,6 @@ export function view(state: GameState, playerId: PlayerId): Result<PlayerView, V
     finished: state.finished,
     requiredCard: state.requiredCard,
     revealed: state.revealed,
+    lastPlay: state.lastPlay,
   });
 }

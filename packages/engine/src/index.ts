@@ -14,3 +14,5 @@ export * from './actions';
 export * from './result';
 export * from './view';
 export * from './reveal';
+export * from './rules';
+export * from './betting';

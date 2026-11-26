@@ -64,5 +64,6 @@ export function makeState(options: {
     finished: options.finished ?? [],
     requiredCard: requiredCard === null ? null : card(requiredCard),
     revealed: options.revealed?.map(cards) ?? options.hands.map(() => []),
+    lastPlay: null,
   };
 }

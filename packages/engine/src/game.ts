@@ -18,7 +18,7 @@ export const THREE_OF_SPADES = makeCard(RANK.THREE, SUIT.SPADES);
 
 /**
  * A complete snapshot of a game at one moment. The engine never changes a
- * GameState; each action produces a brand-new one (coming in the next step).
+ * GameState; each action produces a brand-new one.
  */
 export interface GameState {
   /** The seed used to shuffle. Seed + list of actions = the whole game. */
@@ -39,6 +39,19 @@ export interface GameState {
   readonly requiredCard: Card | null;
   /** revealed[seat] = cards that player has chosen to show to the whole table (see reveal.ts). */
   readonly revealed: readonly Hand[];
+  /** How the combo now on the table was played. `null` when the table is empty. */
+  readonly lastPlay: LastPlay | null;
+}
+
+/**
+ * Extra facts about the most recent play, for the client to show off.
+ * They never affect the rules.
+ */
+export interface LastPlay {
+  /** The player chose to SLAM their cards down (a fun, purely visual flourish). */
+  readonly slammed: boolean;
+  /** The play beat the table by chopping (chặt), e.g. four of a kind on a 2. */
+  readonly chopped: boolean;
 }
 
 export interface CreateGameOptions {
@@ -76,7 +89,8 @@ export function createGame(options: CreateGameOptions): Result<GameState, GameEr
     finished: [],
     requiredCard: isFirstGame ? THREE_OF_SPADES : null,
     revealed: Array.from({ length: PLAYER_COUNT }, () => []),
-});
+    lastPlay: null,
+  });
 }
 
 /** Shuffle a fresh deck with the seed and split it into sorted hands of 13. */
