@@ -16,3 +16,4 @@ export * from './view';
 export * from './reveal';
 export * from './rules';
 export * from './betting';
+export * from './match';
