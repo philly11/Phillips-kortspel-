@@ -10,7 +10,7 @@
  * or real sound files could replace it later without touching the rest of the game.
  */
 
-export type SoundName = 'select' | 'play' | 'slam' | 'pass' | 'chop' | 'turn' | 'chip';
+export type SoundName = 'select' | 'play' | 'slam' | 'pass' | 'chop' | 'turn' | 'chip' | 'pot';
 
 /** Overall loudness, 0 to 1. */
 const MASTER_VOLUME = 0.5;
@@ -21,14 +21,14 @@ let master: GainNode | null = null;
 let muted = loadMuted();
 
 /** Play a sound now (unless muted, or the browser hasn't allowed audio yet). */
-export function playSound(name: SoundName): void {
+export function playSound(name: SoundName, delay = 0): void {
   if (muted) return;
   const audio = getAudio();
   if (audio === null) return;
   // Browsers keep audio paused until the player has clicked or typed on the page
   // (so websites can't blast noise at you). By the time a game runs, they have.
   if (audio.context.state === 'suspended') void audio.context.resume();
-  SOUNDS[name](audio.context, audio.output, audio.context.currentTime);
+  SOUNDS[name](audio.context, audio.output, audio.context.currentTime + delay);
 }
 
 export function isMuted(): boolean {
@@ -95,6 +95,16 @@ export const SOUNDS: Record<SoundName, Recipe> = {
   chip: (ctx, out, at) => {
     tone(ctx, out, at, { type: 'triangle', from: 2600, to: 2500, duration: 0.05, volume: 0.25 });
     tone(ctx, out, at + 0.045, { type: 'triangle', from: 3300, to: 3200, duration: 0.07, volume: 0.2 });
+  },
+
+  
+  // Winning the pot: a cascade of chips tumbling into a pile.
+  pot: (ctx, out, at) => {
+    const pitches = [2300, 2900, 2500, 3400, 2700, 3100, 2400, 3600];
+    pitches.forEach((pitch, index) => {
+      const when = at + index * 0.055;
+      tone(ctx, out, when, { type: 'triangle', from: pitch, to: pitch * 0.96, duration: 0.07, volume: 0.22 });
+    });
   },
 };
 

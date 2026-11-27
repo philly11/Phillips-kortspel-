@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Room } from '@colyseus/sdk';
 import { type BetAction, type Card, type MatchView, type Payment, type PlayerId, PLAYER_COUNT, cardToString } from '@kortspel/engine';
 import type {
@@ -13,6 +13,7 @@ import { BettingBar } from './BettingBar';
 import { GameOver } from './GameOver';
 import { REFUSED_MESSAGES } from './messages';
 import { forgetReconnectToken, saveReconnectToken } from './session';
+import { playSound } from './sound';
 import { type Message, Table } from './Table';
 import { theme } from './theme';
 import { buttonStyle, panelStyle, screenStyle } from './ui';
@@ -73,6 +74,44 @@ export function OnlineGame({ room, onLeave }: OnlineGameProps) {
     room.onMessage('refused', (incoming: RefusedMessage) => setNotice({ kind: 'refused', code: incoming.code }));
     room.send('ready', {});
   }, [room]);
+
+    // ── Chip sounds ──
+  // Bets come as events: a check is a knock on the table (like real poker), anything else clinks.
+  // A new game clinks too: everyone just paid the ante.
+  useEffect(() => {
+    if (notice?.kind !== 'event') return;
+    const event = notice.event;
+    if (event.kind === 'gameStarted') playSound('chip');
+    if (event.kind === 'bet') playSound(event.action.type === 'check' ? 'pass' : 'chip');
+  }, [notice]);
+
+  // Everything else is spotted by comparing the new view with the previous one.
+  const lastView = useRef<MatchView | null>(null);
+  useEffect(() => {
+    const last = lastView.current; // null for the very first view (the game just started)
+    lastView.current = view;
+    if (view === null) return;
+    const me = view.game.me;
+
+    // Chips moved: the pot to the winner (a cascade), or a trick bonus / chop payment (a clink,
+    // a moment after the CHẶT! so you hear both).
+    if (last !== null && view.payments.some((payment) => payment.reason === 'win')) {
+      playSound('pot');
+    } else if (last !== null && view.payments.length > 0) {
+      playSound('chip', view.payments.some((payment) => payment.reason === 'chop') ? 0.3 : 0);
+    }
+
+    // Your turn to BET (the table already dings for your turn to PLAY).
+    const myBetNow = view.phase === 'betting' && view.betting.toAct === me;
+    const myBetBefore = last !== null && last.phase === 'betting' && last.betting.toAct === me;
+    // Betting just ended and you lead the first trick: also your turn.
+    const leadAfterBetting =
+      last !== null && last.phase === 'betting' && view.phase === 'playing' && view.game.currentPlayer === me;
+    if ((myBetNow && !myBetBefore) || leadAfterBetting) {
+      playSound('turn');
+    }
+  }, [view]);
+
 
   /** The name sitting in a seat (or "Player 3" if we don't know it), marked if they're away. */
   const nameOf = (seat: PlayerId): string => {
