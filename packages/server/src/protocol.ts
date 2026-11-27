@@ -2,23 +2,36 @@
  * The "language" the server and the clients speak: every message name and its shape.
  * Both sides import these types, so they can never disagree about a message.
  *
- *   Client → server: 'ready', 'play', 'pass', 'reveal', 'hide', 'nextGame'
+ *   Client → server: 'ready', 'bet', 'play', 'pass', 'reveal', 'hide', 'nextGame'
  *   Server → client: 'lobby', 'view', 'event', 'refused'
  */
-import type { ActionError, Card, PlayerId, PlayerView, RevealError } from '@kortspel/engine';
+import type { BetAction, Card, MatchError, MatchView, PlayerId, RevealError, RuleConfig } from '@kortspel/engine';
 
 // ── Client → server ──────────────────────────────────────────────────────
 
 /**
  * Join options: sent once, with `client.create('tienlen', options)` or
- * `client.joinById(code, options)`. The server cleans the name up (see MAX_NAME_LENGTH).
+ * `client.joinById(code, options)`. The server cleans everything up.
  */
 export interface JoinOptions {
   readonly name?: string;
+  /** The room's chip settings. Only read when CREATING a room; joiners can't change them. */
+  readonly rules?: Partial<RuleConfig>;
 }
 
 /** Names are trimmed and cut to at most this many characters. */
 export const MAX_NAME_LENGTH = 16;
+
+/** The smallest and biggest value the room creator may pick for each setting. */
+export const RULE_LIMITS: { readonly [Setting in keyof RuleConfig]: { readonly min: number; readonly max: number } } = {
+  startingChips: { min: 1, max: 100_000 },
+  ante: { min: 0, max: 10_000 },
+  trickBonus: { min: 0, max: 10_000 },
+  chopPayment: { min: 0, max: 10_000 },
+};
+
+/** 'bet': check, call, or raise by `amount` (only during the betting round). */
+export type BetRequest = BetAction;
 
 /** 'play': play these cards, optionally slamming them. */
 export interface PlayRequest {
@@ -56,12 +69,13 @@ export interface LobbyMessage {
   readonly players: readonly SeatedPlayer[];
 }
 
-/** 'view': your personal view of the game. Never contains other players' hands. */
-export type ViewMessage = PlayerView;
+/** 'view': your personal view of the match: chips (public) + your own cards. Never other hands. */
+export type ViewMessage = MatchView;
 
-/** 'event': something just happened at the table (for messages like "Player 2 passed"). */
+/** 'event': something just happened at the table (for messages like "Bao raised 10"). */
 export type EventMessage =
   | { readonly kind: 'gameStarted' }
+  | { readonly kind: 'bet'; readonly seat: PlayerId; readonly action: BetAction }
   | { readonly kind: 'play'; readonly seat: PlayerId; readonly cards: readonly Card[]; readonly slam: boolean }
   | { readonly kind: 'pass'; readonly seat: PlayerId }
   | { readonly kind: 'reveal'; readonly seat: PlayerId; readonly cards: readonly Card[] }
@@ -70,11 +84,11 @@ export type EventMessage =
 /** Reasons only the server can give (on top of the engine's own error codes). */
 export type ServerErrorCode =
   | 'GAME_NOT_STARTED' // the room isn't full yet
-  | 'NOT_YOUR_TURN' // someone else must play or pass first
+  | 'NOT_YOUR_TURN' // someone else must bet, play or pass first
   | 'BAD_MESSAGE' // the message didn't have the right shape
   | 'GAME_NOT_OVER'; // 'nextGame' while a game is still running
 
 /** 'refused': why your last request was not allowed. Only sent to you. */
 export interface RefusedMessage {
-  readonly code: ActionError['code'] | RevealError['code'] | ServerErrorCode;
+  readonly code: MatchError['code'] | RevealError['code'] | ServerErrorCode;
 }

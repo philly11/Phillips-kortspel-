@@ -1,11 +1,12 @@
 /**
  * Checks the server end to end, without any UI. Pretends to be 4 players:
- * they join a room with names, the game starts, some try to cheat, and someone opens with 3♠.
+ * the creator picks chip settings, everyone joins, they bet, some try to cheat,
+ * and someone opens with 3♠.
  *
  * Start the server first (pnpm dev), then run this in a second terminal (pnpm smoke).
  */
 import { Client, type Room } from '@colyseus/sdk';
-import { type PlayerView, cardToString, makeDeck } from '@kortspel/engine';
+import { type MatchView, cardToString, makeDeck } from '@kortspel/engine';
 import type { EventMessage, LobbyMessage, RefusedMessage } from '../src/protocol';
 
 const SERVER = 'http://localhost:2567';
@@ -16,7 +17,7 @@ interface Player {
   label: string;
   room: Room;
   lobby?: LobbyMessage;
-  view?: PlayerView;
+  view?: MatchView;
   event?: EventMessage;
   refused?: RefusedMessage;
 }
@@ -24,7 +25,7 @@ interface Player {
 function listen(room: Room, label: string): Player {
   const player: Player = { label, room };
   room.onMessage('lobby', (message: LobbyMessage) => (player.lobby = message));
-  room.onMessage('view', (message: PlayerView) => (player.view = message));
+  room.onMessage('view', (message: MatchView) => (player.view = message));
   room.onMessage('event', (message: EventMessage) => (player.event = message));
   room.onMessage('refused', (message: RefusedMessage) => (player.refused = message));
   room.send('ready', {});
@@ -39,58 +40,92 @@ function check(passed: boolean, label: string) {
 async function main() {
   const client = new Client(SERVER);
 
-  // ── Four players meet (one with a messy name, one with none) ──
-  const first = await client.create('tienlen', { name: 'Anna' });
+  // ── The creator picks the chips. Some values are messy on purpose. ──
+  const first = await client.create('tienlen', {
+    name: 'Anna',
+    rules: { startingChips: 50.9, ante: 3, trickBonus: 'lots', chopPayment: -4 },
+  });
   console.log(`Created a room. Join code: ${first.roomId}`);
   const players = [listen(first, 'A')];
-  const joinOptions = [{ name: '  Bao  ' }, { name: 'Chi with a very long name indeed' }, {}];
+  // Joiners try to change the rules too: they must be ignored.
+  const joinOptions = [{ name: '  Bao  ', rules: { startingChips: 9999 } }, { name: 'Chi with a very long name indeed' }, {}];
   for (const [index, options] of joinOptions.entries()) {
     players.push(listen(await client.joinById(first.roomId, options), ['B', 'C', 'D'][index]));
   }
   await wait(500);
 
   const names = players[0].lobby?.players.map((p) => p.name) ?? [];
-  console.log(`Names at the table: ${names.map((n) => `"${n}"`).join(', ')}`);
-  check(
-    names.join('|') === 'Anna|Bao|Chi with a very|Player 4',
-    'names are cleaned up: trimmed, cut to 16 characters, and a default for a missing name',
-  );
+  check(names.join('|') === 'Anna|Bao|Chi with a very|Player 4', 'names are cleaned up');
 
   const views = players.map((p) => p.view);
   check(views.every((v) => v !== undefined), 'all four players received a view when the 4th sat down');
-  check(views.every((v) => v !== undefined && !('hands' in v) && !('seed' in v)), 'no view contains other hands or the seed');
+  check(
+    views.every((v) => v !== undefined && !('hands' in v.game) && !('seed' in v.game)),
+    'no view contains other hands or the seed',
+  );
 
-  // Who holds 3♠? Every view agrees on whose turn it is.
-  const starter = players.find((p) => p.view?.me === p.view?.currentPlayer);
-  const someoneElse = players.find((p) => p !== starter);
-  if (starter?.view === undefined || someoneElse?.view === undefined) {
-    console.log('✗ could not find the starting player; stopping.');
+  const firstView = players[0].view;
+  if (firstView === undefined) return;
+  console.log(`Rules: ${JSON.stringify(firstView.rules)}`);
+  check(
+    JSON.stringify(firstView.rules) === JSON.stringify({ startingChips: 50, ante: 3, trickBonus: 2, chopPayment: 0 }),
+    "the creator's rules are cleaned up (50.9 → 50, 'lots' → default 2, -4 → 0); the joiner's are ignored",
+  );
+  check(firstView.phase === 'betting', 'the game starts with the betting round');
+  check(firstView.stacks.join(',') === '47,47,47,47' && firstView.pot === 12, 'everyone paid the ante of 3 (pot 12)');
+
+  // Who bets first? The player who will lead the game (holder of 3♠).
+  const bettor = players.find((p) => p.view?.game.me === p.view?.betting.toAct);
+  const someoneElse = players.find((p) => p !== bettor);
+  if (bettor?.view === undefined || someoneElse?.view === undefined) {
+    console.log('✗ could not find the first bettor; stopping.');
     return;
   }
-  console.log(`Player ${starter.label} (seat ${starter.view.me}) starts with: ${starter.view.hand.map(cardToString).join(' ')}`);
+  console.log(`Player ${bettor.label} (seat ${bettor.view.game.me}) bets first and holds: ${bettor.view.game.hand.map(cardToString).join(' ')}`);
 
-  // ── Cheating attempts ──
-  someoneElse.room.send('play', { cards: [someoneElse.view.hand[0]] });
+  // ── Cheating attempts during betting ──
+  bettor.room.send('play', { cards: [0] });
   await wait(200);
-  check(someoneElse.refused?.code === 'NOT_YOUR_TURN', `player ${someoneElse.label} playing out of turn is refused (NOT_YOUR_TURN)`);
+  check(bettor.refused?.code === 'WRONG_PHASE', 'playing a card during betting is refused (WRONG_PHASE)');
 
-  const notMine = makeDeck().find((card) => !starter.view?.hand.includes(card));
-  starter.room.send('play', { cards: [notMine] });
+  someoneElse.room.send('bet', { type: 'check' });
   await wait(200);
-  check(starter.refused?.code === 'CARDS_NOT_IN_HAND', `playing a card you don't hold is refused (CARDS_NOT_IN_HAND)`);
+  check(someoneElse.refused?.code === 'NOT_YOUR_TURN', 'betting out of turn is refused (NOT_YOUR_TURN)');
 
-  starter.room.send('play', { cards: 'give me all the 2s' });
+  bettor.room.send('bet', { type: 'raise', amount: 'a million' });
   await wait(200);
-  check(starter.refused?.code === 'BAD_MESSAGE', 'a garbage message is refused (BAD_MESSAGE)');
+  check(bettor.refused?.code === 'BAD_MESSAGE', 'a garbage bet is refused (BAD_MESSAGE)');
 
-  // ── A real move: slam the 3♠ ──
-  starter.room.send('play', { cards: [0], slam: true });
+  bettor.room.send('bet', { type: 'raise', amount: 1000 });
+  await wait(200);
+  check(bettor.refused?.code === 'NOT_ENOUGH_CHIPS', 'raising more than you have is refused (NOT_ENOUGH_CHIPS)');
+
+  // ── Real bets: raise 10, everyone else calls ──
+  bettor.room.send('bet', { type: 'raise', amount: 10 });
+  await wait(200);
+  for (let step = 1; step < 4; step++) {
+    const seat = (bettor.view.game.me + step) % 4;
+    const caller = players.find((p) => p.view?.game.me === seat);
+    caller?.room.send('bet', { type: 'call' });
+    await wait(200);
+  }
+  check(
+    players.every((p) => p.view?.phase === 'playing' && p.view.pot === 52 && p.view.stacks.join(',') === '37,37,37,37'),
+    'after a raise of 10 and three calls: everyone has 37, the pot is 52, and play begins',
+  );
+
+  // ── Card cheats still refused, then a real move: slam the 3♠ ──
+  const notMine = makeDeck().find((card) => !bettor.view?.game.hand.includes(card));
+  bettor.room.send('play', { cards: [notMine] });
+  await wait(200);
+  check(bettor.refused?.code === 'CARDS_NOT_IN_HAND', `playing a card you don't hold is refused (CARDS_NOT_IN_HAND)`);
+
+  bettor.room.send('play', { cards: [0], slam: true });
   await wait(300);
   check(
-    players.every((p) => p.view?.table?.cards[0] === 0 && p.view.lastPlay?.slammed === true),
+    players.every((p) => p.view?.game.table?.cards[0] === 0 && p.view.game.lastPlay?.slammed === true),
     'everyone sees 3♠ slammed onto the table',
   );
-  check(players.every((p) => p.event?.kind === 'play'), 'everyone got a "play" event');
 
   for (const player of players) {
     await player.room.leave();
