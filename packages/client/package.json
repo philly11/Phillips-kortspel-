@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@colyseus/sdk": "^0.18.10",
     "@kortspel/engine": "workspace:*",
+    "@kortspel/server": "workspace:*",
     "motion": "^14.14.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

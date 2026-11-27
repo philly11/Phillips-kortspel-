@@ -7,12 +7,14 @@ import { theme } from './theme';
 interface SeatProps {
   /** Which player sits here. */
   seat: PlayerId;
+  /** Their name, shown above their cards. */
+  name: string;
   /** What the viewing player is allowed to know. Never the full GameState. */
   view: PlayerView;
 }
 
 /** An opponent's place at the table: name, face-down cards, and status. */
-export function Seat({ seat, view }: SeatProps) {
+export function Seat({ seat, name, view }: SeatProps) {
   const count = view.cardCounts[seat];
   const place = view.finished.indexOf(seat); // -1 if still playing
   const hasPassed = view.passed[seat];
@@ -32,7 +34,7 @@ export function Seat({ seat, view }: SeatProps) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 20, fontWeight: theme.font.weight }}>Player {seat + 1}</span>
+        <span style={{ fontSize: 20, fontWeight: theme.font.weight }}>{name}</span>
         {place >= 0 ? (
           <span style={badgeStyle}>Out · {ordinal(place + 1)}</span>
         ) : (

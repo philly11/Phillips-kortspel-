@@ -1,4 +1,5 @@
-import type { ActionError, RevealError } from '@kortspel/engine';
+import type { ActionError, BetError, RevealError } from '@kortspel/engine';
+import type { RefusedMessage } from '@kortspel/server/protocol';
 
 /**
  * A friendly message for every reason the engine can refuse an action.
@@ -23,4 +24,28 @@ export const REVEAL_ERROR_MESSAGES: Record<RevealError['code'], string> = {
   INVALID_PLAYER: 'That player does not exist.',
   EMPTY: 'Select the cards you want to show first.',
   CARDS_NOT_IN_HAND: 'You can only show cards you actually have.',
+};
+
+/** A friendly message for every reason a bet can be refused. */
+export const BET_ERROR_MESSAGES: Record<BetError['code'], string> = {
+  BETTING_OVER: 'Betting is over. Time to play your cards!',
+  MUST_CALL: 'Someone bet more than you: call or raise.',
+  NOTHING_TO_CALL: 'There is nothing to call: check or raise.',
+  BAD_AMOUNT: 'Raise by a whole number of chips (at least 1).',
+  NOT_ENOUGH_CHIPS: "You don't have that many chips.",
+};
+
+/**
+ * Every reason the SERVER can refuse a request: the engine's reasons, plus a few only
+ * the server can give (online play). Some codes appear in both lists above; that's fine.
+ */
+export const REFUSED_MESSAGES: Record<RefusedMessage['code'], string> = {
+  ...ERROR_MESSAGES,
+  ...REVEAL_ERROR_MESSAGES,
+  ...BET_ERROR_MESSAGES,
+  WRONG_PHASE: 'Not right now: first everyone bets, then the cards are played.',
+  NOT_YOUR_TURN: "It's not your turn yet. Wait for the others.",
+  GAME_NOT_STARTED: 'The game has not started yet.',
+  BAD_MESSAGE: 'Something went wrong sending that. Try again.',
+  GAME_NOT_OVER: 'The game is still going.',
 };
