@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { Room } from '@colyseus/sdk';
+import { DEFAULT_RULES } from '@kortspel/engine';
 import type { JoinOptions } from '@kortspel/server/protocol';
 import { MAX_NAME_LENGTH } from '@kortspel/server/protocol';
 import { gameServer } from './connection';
+import { RoomSettings, type SettingsText } from './RoomSettings';
 import { theme } from './theme';
 import { buttonStyle, inputStyle, panelStyle, screenStyle } from './ui';
 
@@ -20,7 +22,26 @@ export function StartMenu({ onJoined, onPlayLocally }: StartMenuProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [settings, setSettings] = useState<SettingsText>({
+    startingChips: String(DEFAULT_RULES.startingChips),
+    ante: String(DEFAULT_RULES.ante),
+    trickBonus: String(DEFAULT_RULES.trickBonus),
+    chopPayment: String(DEFAULT_RULES.chopPayment),
+  });
+
+  // Joining: just your name. Creating: your name AND the room's chip settings.
   const options: JoinOptions = { name };
+  // An empty box is sent as "not set", so the server uses the default for it.
+  const numberOrUnset = (text: string): number | undefined => (text.trim() === '' ? undefined : Number(text));
+  const createOptions: JoinOptions = {
+    name,
+    rules: {
+      startingChips: numberOrUnset(settings.startingChips),
+      ante: numberOrUnset(settings.ante),
+      trickBonus: numberOrUnset(settings.trickBonus),
+      chopPayment: numberOrUnset(settings.chopPayment),
+    },
+  };
 
   /**
    * Connecting takes time (the server is far away, in internet terms), so these are
@@ -30,7 +51,7 @@ export function StartMenu({ onJoined, onPlayLocally }: StartMenuProps) {
     setBusy(true);
     setError(null);
     try {
-      onJoined(await gameServer.create('tienlen', options));
+      onJoined(await gameServer.create('tienlen', createOptions));
     } catch {
       setError('Could not reach the game server. Is it running?');
     } finally {
@@ -79,6 +100,7 @@ export function StartMenu({ onJoined, onPlayLocally }: StartMenuProps) {
         >
           Create room
         </button>
+        <RoomSettings value={settings} onChange={setSettings} />
 
         <div style={{ display: 'flex', gap: 12 }}>
           <label style={{ flex: 1, display: 'flex' }}>
