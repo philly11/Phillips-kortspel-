@@ -1,10 +1,12 @@
-import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react';
 import { useAnimate } from 'motion/react';
 import { type Card, type PlayerId, type PlayerView, PLAYER_COUNT, cardToString } from '@kortspel/engine';
 import { ChopBurst } from './ChopBurst';
 import { PlayButton } from './PlayButton';
 import { PlayingCard } from './PlayingCard';
 import { Seat } from './Seat';
+import { SoundToggle } from './SoundToggle';
+import { playSound } from './sound';
 import { TrickPile } from './TrickPile';
 import { theme } from './theme';
 import { buttonStyle } from './ui';
@@ -76,6 +78,7 @@ export function Table({ view: v, nameOf, subtitle, message, onPlay, onPass, onSh
 
   /** Click a card in your hand: select it, or unselect it if it was selected. */
   function toggle(card: Card) {
+    playSound('select');
     setSelected((current) =>
       current.includes(card) ? current.filter((c) => c !== card) : [...current, card],
     );
@@ -83,6 +86,30 @@ export function Table({ view: v, nameOf, subtitle, message, onPlay, onPass, onSh
 
   const overlap = theme.card.width * theme.card.handOverlap;
   const isMyTurn = v.currentPlayer === v.me;
+
+
+  
+  // ── Sounds for what happens at the table: anyone's play, pass or chop, and your turn ──
+  // We compare with what the table looked like LAST time it was drawn, to spot changes.
+  const passedCount = v.passed.filter(Boolean).length;
+  const before = useRef<{ playKey: string | null; passedCount: number; isMyTurn: boolean } | null>(null);
+  useEffect(() => {
+    const last = before.current;
+    before.current = { playKey, passedCount, isMyTurn };
+    if (last === null) return; // the first draw: nothing has "happened" yet
+
+    if (playKey !== null && playKey !== last.playKey) {
+      // New cards on the table.
+      playSound(v.lastPlay?.chopped ? 'chop' : v.lastPlay?.slammed ? 'slam' : 'play');
+    } else if (passedCount > last.passedCount || (last.playKey !== null && playKey === null)) {
+      // Someone passed (the last pass of a trick clears the table instead).
+      playSound('pass');
+    }
+    if (isMyTurn && !last.isMyTurn) {
+      playSound('turn');
+    }
+  }, [playKey, passedCount, isMyTurn, v.lastPlay]);
+
 
   // Seats are placed relative to whoever is at the bottom ("me"):
   // the next player in turn order sits on my right, then across, then on my left.
@@ -105,7 +132,7 @@ export function Table({ view: v, nameOf, subtitle, message, onPlay, onPass, onSh
         gridTemplateColumns: '1fr 2fr 1fr',
         gridTemplateRows: 'auto 1fr auto',
         gridTemplateAreas: `
-          "title  top    ."
+          "title  top    sound"
           "left   center right"
           "me     me     me"
         `,
@@ -147,6 +174,10 @@ export function Table({ view: v, nameOf, subtitle, message, onPlay, onPass, onSh
         <h1 style={{ margin: 0, fontSize: 28 }}>Tiến Lên</h1>
         <p style={{ margin: '2px 0 0', fontSize: 14, color: theme.colors.tableTextMuted }}>{subtitle}</p>
       </header>
+
+      <div style={{ gridArea: 'sound', justifySelf: 'end', alignSelf: 'start', zIndex: 1 }}>
+        <SoundToggle />
+      </div>
 
       <div style={{ gridArea: 'top', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
         <Seat seat={topSeat} name={nameOf(topSeat)} view={v} />
